@@ -1,0 +1,1 @@
+"""HackSwarm central hub."""

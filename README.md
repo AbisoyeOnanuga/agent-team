@@ -91,6 +91,25 @@ The system comes pre-configured with a **cascading smart fallback router** that 
 
 ---
 
+## Phone dispatch
+
+The live console is a mobile browser, not the desk visualizer. The PC stays on and runs the hub. The phone joins the same Tailscale tailnet and opens `http://<pc-tailscale-ip>:3000`. Do not port-forward the hub.
+
+Grok in Cursor stays the desk coding agent. The phone talks to this open stack: FastAPI, SQLite, and Aider. A 3060 laptop can serve Ollama (`qwen2.5:7b-instruct`) if you point `OLLAMA_BASE_URL` at it. The console does not need that GPU.
+
+```powershell
+pip install -r requirements.txt
+# set CONSOLE_PIN in .env first
+python -m uvicorn central_hub.api.app:app --host 0.0.0.0 --port 8787
+cd apps/console
+npm install
+npm run dev
+```
+
+Sign in with the PIN. Settings has three allowance levels: Watch, Routine, and Open. Routine edits locked files on its own and waits before a commit, a delete, or an install. Push and secret files never run from the phone. A gate with no answer stays pending.
+
+The diagram in `central_hub/dashboard/visualizer.html` is a desk simulation.
+
 ## 🚀 Quickstart Guide
 
 ### 1. Launch Aider with Any Free Provider

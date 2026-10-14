@@ -39,6 +39,11 @@ ENV/
 chroma_data/
 swarm_state.db
 
+# Phone console
+node_modules/
+.next/
+.hackswarm-scratch/
+
 # OpenCode & IDE
 .opencode/
 .aider*

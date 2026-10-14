@@ -65,6 +65,65 @@ def load_env():
                     if k not in os.environ and v:
                         os.environ[k] = v
 
+def aider_available() -> bool:
+    from shutil import which
+
+    return which("aider") is not None
+
+
+def run_message(
+    *,
+    provider: str,
+    files: list[str],
+    message: str,
+    cwd: Path,
+    on_line,
+) -> int:
+    """Edit files without auto-commit. The API key is passed only through the environment."""
+    load_env()
+    if provider not in PROVIDER_CONFIGS:
+        provider = "gemini"
+    config = PROVIDER_CONFIGS[provider]
+    api_key = os.getenv(config["api_key_env"]) or ""
+    if not api_key and provider in ("ollama", "copilot"):
+        api_key = "ollama"
+    if not api_key or api_key.startswith("your_"):
+        return 2
+
+    env = os.environ.copy()
+    env["OPENAI_API_BASE"] = config["api_base"]
+    env["OPENAI_API_KEY"] = api_key
+    cmd = [
+        "aider",
+        "--model",
+        config["model"],
+        "--openai-api-base",
+        config["api_base"],
+        "--no-auto-commits",
+        "--yes",
+        "--message",
+        message,
+        *files,
+    ]
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            cwd=cwd,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+    except FileNotFoundError:
+        return 127
+    assert proc.stdout is not None
+    for line in proc.stdout:
+        text = line.strip()
+        if text and api_key not in text:
+            on_line(text)
+    return proc.wait(timeout=180)
+
+
 def main():
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -87,6 +146,12 @@ def main():
         "files",
         nargs="*",
         help="Target files to edit in Aider"
+    )
+    parser.add_argument(
+        "--message",
+        type=str,
+        default=None,
+        help="Non-interactive instruction. Always runs with --no-auto-commits."
     )
     parser.add_argument(
         "--dry-run",
@@ -114,18 +179,21 @@ def main():
     env["OPENAI_API_BASE"] = config["api_base"]
     env["OPENAI_API_KEY"] = api_key
 
-    # Build Aider CLI command
+    # Build Aider CLI command. The key stays in the environment, not the argument list.
     cmd = [
         "aider",
         "--model", config["model"],
         "--openai-api-base", config["api_base"],
-        "--openai-api-key", api_key
+        "--no-auto-commits",
+        "--yes",
     ]
 
-    # If task ID provided, notify developer
-    if args.task_id:
+    message = args.message
+    if args.task_id and not message:
         print(f"[*] Linked to MCP Task: {args.task_id}")
-        cmd.extend(["--message", f"Working on task {args.task_id}. Check shared contracts."])
+        message = f"Working on task {args.task_id}. Check shared contracts."
+    if message:
+        cmd.extend(["--message", message])
 
     if args.files:
         cmd.extend(args.files)

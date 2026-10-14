@@ -1,0 +1,9 @@
+{
+  "name": "HackSwarm Dispatch",
+  "short_name": "Dispatch",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#14160f",
+  "theme_color": "#14160f",
+  "lang": "en"
+}
