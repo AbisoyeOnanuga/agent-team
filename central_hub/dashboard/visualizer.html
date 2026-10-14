@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>HackSwarm Live Architecture Visualizer</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.08); opacity: 0.3; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    @keyframes travel-up-left {
+      0% { transform: translate(160px, 320px); opacity: 0; }
+      20% { opacity: 1; }
+      80% { opacity: 1; }
+      100% { transform: translate(450px, 120px); opacity: 0; }
+    }
+    @keyframes travel-up-center {
+      0% { transform: translate(450px, 350px); opacity: 0; }
+      20% { opacity: 1; }
+      80% { opacity: 1; }
+      100% { transform: translate(450px, 120px); opacity: 0; }
+    }
+    @keyframes travel-up-right {
+      0% { transform: translate(740px, 320px); opacity: 0; }
+      20% { opacity: 1; }
+      80% { opacity: 1; }
+      100% { transform: translate(450px, 120px); opacity: 0; }
+    }
+    .packet-left { animation: travel-up-left 2s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+    .packet-center { animation: travel-up-center 2s cubic-bezier(0.4, 0, 0.2, 1) infinite; animation-delay: 0.4s; }
+    .packet-right { animation: travel-up-right 2s cubic-bezier(0.4, 0, 0.2, 1) infinite; animation-delay: 0.8s; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 antialiased p-4 min-h-screen">
+
+  <div class="max-w-6xl mx-auto space-y-4">
+    <!-- Header -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <div class="flex items-center gap-3">
+          <span class="px-2.5 py-1 rounded-full text-xs font-bold bg-red-500/10 text-red-500 border border-red-500/20">BEEF NODE</span>
+          <h1 class="text-xl font-bold tracking-tight">HackSwarm Swarm Visualizer</h1>
+          <span class="px-2 py-0.5 rounded text-xs bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">● LAN / Tailscale Mesh</span>
+        </div>
+        <p class="text-slate-400 text-sm mt-1">
+          Unified Memory, FastMCP Heartbeats, and Distributed Coding Agents (Aider, OpenHands & OpenCode)
+        </p>
+      </div>
+
+      <!-- 10s Heartbeat Timer -->
+      <div class="flex items-center gap-4 bg-slate-950 border border-slate-800 px-4 py-2.5 rounded-xl">
+        <div class="text-right">
+          <div class="text-xs text-slate-400 font-medium">Heartbeat Interval</div>
+          <div class="text-xs font-semibold text-emerald-400 flex items-center justify-end gap-1.5">
+            <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            Sync every 10s
+          </div>
+        </div>
+        <div class="text-2xl font-black font-mono text-white min-w-[50px] text-center" id="countdown-display">
+          10s
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Visualizer Canvas Area -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 relative overflow-hidden shadow-sm">
+      
+      <!-- Interactive Topology Diagram -->
+      <div class="relative w-full h-[460px] mx-auto select-none">
+        
+        <!-- Connecting SVG Lines & Arrows -->
+        <svg class="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 900 460">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 8 5 L 0 9 z" fill="#64748b"/>
+            </marker>
+          </defs>
+
+          <!-- Line 1: Dev 1 to Beef -->
+          <line x1="200" y1="310" x2="410" y2="135" stroke="#334155" stroke-dasharray="6,6" stroke-width="2"/>
+          <line x1="200" y1="310" x2="410" y2="135" stroke="#3b82f6" stroke-width="2" marker-end="url(#arrow)" class="opacity-70"/>
+
+          <!-- Line 2: Dev 2 to Beef -->
+          <line x1="450" y1="315" x2="450" y2="140" stroke="#334155" stroke-dasharray="6,6" stroke-width="2"/>
+          <line x1="450" y1="315" x2="450" y2="140" stroke="#10b981" stroke-width="2" marker-end="url(#arrow)" class="opacity-70"/>
+
+          <!-- Line 3: Dev 3 to Beef -->
+          <line x1="700" y1="310" x2="490" y2="135" stroke="#334155" stroke-dasharray="6,6" stroke-width="2"/>
+          <line x1="700" y1="310" x2="490" y2="135" stroke="#f59e0b" stroke-width="2" marker-end="url(#arrow)" class="opacity-70"/>
+
+          <!-- Data Packet Particle Pulses -->
+          <circle cx="0" cy="0" r="5" fill="#3b82f6" class="packet-left shadow-lg" id="pulse-1"/>
+          <circle cx="0" cy="0" r="5" fill="#10b981" class="packet-center shadow-lg" id="pulse-2"/>
+          <circle cx="0" cy="0" r="5" fill="#10b981" class="packet-right shadow-lg" id="pulse-3"/>
+        </svg>
+
+        <!-- 10s Label Badges on Arrows (Exact from user sketch) -->
+        <div class="absolute left-[285px] top-[200px] -translate-x-1/2 -translate-y-1/2 bg-slate-950 border border-slate-700 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold text-blue-400 shadow-sm">
+          10s
+        </div>
+        <div class="absolute left-[450px] top-[225px] -translate-x-1/2 -translate-y-1/2 bg-slate-950 border border-slate-700 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold text-emerald-400 shadow-sm">
+          10s
+        </div>
+        <div class="absolute left-[615px] top-[200px] -translate-x-1/2 -translate-y-1/2 bg-slate-950 border border-slate-700 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold text-amber-400 shadow-sm">
+          10s
+        </div>
+
+        <!-- ============================================== -->
+        <!-- TOP CENTER: BEEF POWERHOUSE NODE (Host Machine) -->
+        <!-- ============================================== -->
+        <div class="absolute left-1/2 top-[10px] -translate-x-1/2 w-[340px] z-20">
+          <div class="bg-slate-900 border-2 border-red-500/60 rounded-2xl p-4 shadow-xl backdrop-blur relative overflow-hidden transition-all hover:scale-105 duration-200">
+            <div class="absolute -right-10 -top-10 w-28 h-28 bg-red-500/10 rounded-full blur-2xl pointer-events-none"></div>
+            
+            <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
+              <div class="flex items-center gap-2">
+                <span class="text-lg font-black tracking-wide text-red-500 font-mono">Beef</span>
+                <span class="text-xs px-2 py-0.5 rounded bg-red-500/15 text-red-400 font-medium">Host Machine (GTX 1660)</span>
+              </div>
+              <span class="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Active
+              </span>
+            </div>
+
+            <!-- Labels from sketch: MCP, a, OH -->
+            <div class="flex items-center gap-2 my-2 font-mono font-bold text-sm">
+              <span class="px-2.5 py-1 rounded-md bg-slate-950 border border-slate-700 text-white">MCP</span>
+              <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">a (Aider)</span>
+              <span class="px-2 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/40">OH (OpenHands)</span>
+            </div>
+
+            <!-- Specs Grid -->
+            <div class="grid grid-cols-2 gap-1.5 text-xs mt-3 pt-2 border-t border-slate-800 font-mono text-slate-400">
+              <div>🧠 Memory: <span class="text-white">SQLite + Chroma</span></div>
+              <div>⚡ Engine: <span class="text-white">FastMCP (8000)</span></div>
+              <div>🤖 Offline: <span class="text-emerald-400 font-semibold">Qwen 2.5:7B</span></div>
+              <div>🔒 Locks: <span id="lock-count-badge" class="text-amber-400 font-semibold">0 active</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================== -->
+        <!-- BOTTOM LEFT: TEAMMATE 1 (Frontend Dev) -->
+        <!-- ============================================== -->
+        <div class="absolute left-[60px] bottom-[20px] w-[240px] z-20">
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 shadow-md hover:border-blue-500 transition-all hover:scale-105 duration-200">
+            <div class="flex items-center justify-between pb-1.5 border-b border-slate-800">
+              <span class="text-xs font-bold text-blue-400">Dev 1 (Frontend UI)</span>
+              <span class="text-[10px] text-slate-400 font-mono">100.64.0.11</span>
+            </div>
+            
+            <div class="flex items-center gap-1.5 my-2 font-mono text-xs font-bold">
+              <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">a</span>
+              <span class="px-2 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30">OH</span>
+              <span class="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">OpenCode</span>
+            </div>
+
+            <div class="text-[11px] text-slate-400 mt-2 flex justify-between items-center">
+              <span>Task: <span id="dev1-task" class="text-white font-medium">Idle</span></span>
+              <button onclick="triggerDev1Action()" class="text-xs px-2 py-0.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded border border-blue-500/30 transition">Claim</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================== -->
+        <!-- BOTTOM CENTER: TEAMMATE 2 (Backend API) -->
+        <!-- ============================================== -->
+        <div class="absolute left-1/2 bottom-[15px] -translate-x-1/2 w-[240px] z-20">
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 shadow-md hover:border-emerald-500 transition-all hover:scale-105 duration-200">
+            <div class="flex items-center justify-between pb-1.5 border-b border-slate-800">
+              <span class="text-xs font-bold text-emerald-400">Dev 2 (Backend Core)</span>
+              <span class="text-[10px] text-slate-400 font-mono">100.64.0.12</span>
+            </div>
+
+            <div class="flex items-center gap-1.5 my-2 font-mono text-xs font-bold">
+              <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">a</span>
+              <span class="px-2 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30">OH</span>
+              <span class="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">LangChain</span>
+            </div>
+
+            <div class="text-[11px] text-slate-400 mt-2 flex justify-between items-center">
+              <span>Task: <span id="dev2-task" class="text-white font-medium">Idle</span></span>
+              <button onclick="triggerDev2Action()" class="text-xs px-2 py-0.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded border border-emerald-500/30 transition">Sync</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================== -->
+        <!-- BOTTOM RIGHT: TEAMMATE 3 (Fullstack / Data) -->
+        <!-- ============================================== -->
+        <div class="absolute right-[60px] bottom-[20px] w-[240px] z-20">
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-3.5 shadow-md hover:border-amber-500 transition-all hover:scale-105 duration-200">
+            <div class="flex items-center justify-between pb-1.5 border-b border-slate-800">
+              <span class="text-xs font-bold text-amber-400">Dev 3 (Fullstack / DB)</span>
+              <span class="text-[10px] text-slate-400 font-mono">100.64.0.13</span>
+            </div>
+
+            <div class="flex items-center gap-1.5 my-2 font-mono text-xs font-bold">
+              <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">a</span>
+              <span class="px-2 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30">OH</span>
+              <span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">Gemini</span>
+            </div>
+
+            <div class="text-[11px] text-slate-400 mt-2 flex justify-between items-center">
+              <span>Task: <span id="dev3-task" class="text-white font-medium">Idle</span></span>
+              <button onclick="triggerDev3Action()" class="text-xs px-2 py-0.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded border border-amber-500/30 transition">Lock</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Quick Simulation Control Bar -->
+      <div class="mt-4 pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-400 font-medium">PM Simulation Controls:</span>
+          <button onclick="simulatePulse()" class="text-xs px-3 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-white border border-slate-700 font-medium transition flex items-center gap-1.5">
+            ⚡ 10s Heartbeat Pulse
+          </button>
+          <button onclick="simulateClaimConflict()" class="text-xs px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-medium transition">
+            ⚠️ Test Lock Conflict
+          </button>
+          <button onclick="resetBoard()" class="text-xs px-3 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-400 border border-slate-700 transition">
+            🔄 Reset
+          </button>
+        </div>
+
+        <div class="text-xs text-slate-400 font-mono flex items-center gap-3">
+          <span>Active Subscriptions: <strong class="text-emerald-400">Free-Tier Pooled</strong></span>
+          <span>GPU: <strong class="text-red-400">GTX 1660 6GB (qwen2.5:7b)</strong></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Status Console & Lock Board -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      
+      <!-- Live MCP Event Log -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
+          <h3 class="text-sm font-semibold flex items-center gap-2">
+            <span>📡 Real-Time MCP Event Bus</span>
+            <span class="text-xs text-emerald-400 font-mono">Listening on port 8000</span>
+          </h3>
+          <span class="text-[11px] text-slate-400 font-mono" id="log-count">3 events</span>
+        </div>
+        <div id="event-log" class="font-mono text-xs space-y-1.5 max-h-[140px] overflow-y-auto pr-2 text-slate-400">
+          <div class="text-emerald-400/80">[SYSTEM] Beef FastMCP hub initialized at 100.64.0.10:8000</div>
+          <div>[REGISTRY] Teammate nodes registered: Dev 1, Dev 2, Dev 3</div>
+          <div class="text-blue-400/80">[HEARTBEAT] 10s synchronization clock active across all clients</div>
+        </div>
+      </div>
+
+      <!-- Active File Locks & Backlog Table -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
+          <h3 class="text-sm font-semibold flex items-center gap-2">
+            <span>🔒 Central Task & File Locks</span>
+            <span class="text-xs text-amber-400 font-mono">Zero Merge Conflict Engine</span>
+          </h3>
+          <span class="text-[11px] text-slate-400 font-mono">SQLite WAL</span>
+        </div>
+        
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs font-mono">
+            <thead>
+              <tr class="text-slate-400 border-b border-slate-800">
+                <th class="pb-1.5 font-medium">Task ID</th>
+                <th class="pb-1.5 font-medium">Developer</th>
+                <th class="pb-1.5 font-medium">Tool</th>
+                <th class="pb-1.5 font-medium">Locked Files</th>
+              </tr>
+            </thead>
+            <tbody id="lock-table-body" class="divide-y divide-slate-800 text-slate-200">
+              <tr id="empty-row">
+                <td colspan="4" class="py-3 text-center text-slate-500 italic">
+                  No active locks. Click "Claim" or "Lock" above to simulate.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Interactive Logic -->
+  <script>
+    let countdown = 10;
+    const countdownEl = document.getElementById('countdown-display');
+    const logEl = document.getElementById('event-log');
+    const logCountEl = document.getElementById('log-count');
+    const lockBodyEl = document.getElementById('lock-table-body');
+    const lockCountBadge = document.getElementById('lock-count-badge');
+    let logCounter = 3;
+    let activeLocks = [];
+
+    // 10s Heartbeat Loop
+    setInterval(() => {
+      countdown--;
+      if (countdown <= 0) {
+        countdown = 10;
+        onHeartbeat();
+      }
+      countdownEl.innerText = countdown + 's';
+    }, 1000);
+
+    function addLog(msg, color = '') {
+      logCounter++;
+      const item = document.createElement('div');
+      item.className = color;
+      item.innerText = `[${new Date().toLocaleTimeString()}] ` + msg;
+      logEl.prepend(item);
+      logCountEl.innerText = `${logCounter} events`;
+    }
+
+    function onHeartbeat() {
+      addLog('10s Sync Pulse: Health check OK from Dev1, Dev2, Dev3', 'text-emerald-400/90');
+      ['pulse-1', 'pulse-2', 'pulse-3'].forEach(id => {
+        const el = document.getElementById(id);
+        el.style.animation = 'none';
+        void el.offsetWidth;
+        el.style.animation = '';
+      });
+    }
+
+    function simulatePulse() {
+      countdown = 10;
+      countdownEl.innerText = '10s';
+      onHeartbeat();
+    }
+
+    function renderLocks() {
+      lockCountBadge.innerText = `${activeLocks.length} active`;
+      if (activeLocks.length === 0) {
+        lockBodyEl.innerHTML = `<tr id="empty-row"><td colspan="4" class="py-3 text-center text-slate-500 italic">No active locks. Click "Claim" or "Lock" above to simulate.</td></tr>`;
+        return;
+      }
+      lockBodyEl.innerHTML = activeLocks.map(l => `
+        <tr class="hover:bg-slate-950 transition">
+          <td class="py-1.5 font-bold text-blue-400">${l.id}</td>
+          <td class="py-1.5">${l.dev}</td>
+          <td class="py-1.5"><span class="px-1.5 py-0.5 rounded text-[10px] ${l.tool === 'Aider' ? 'bg-emerald-500/20 text-emerald-400' : l.tool === 'OpenHands' ? 'bg-orange-500/20 text-orange-400' : 'bg-blue-500/20 text-blue-400'}">${l.tool}</span></td>
+          <td class="py-1.5 text-amber-300 font-semibold">${l.file}</td>
+        </tr>
+      `).join('');
+    }
+
+    function triggerDev1Action() {
+      const dev1Task = document.getElementById('dev1-task');
+      dev1Task.innerText = 'Auth UI (Aider)';
+      activeLocks = activeLocks.filter(l => l.id !== 'FEAT-101');
+      activeLocks.push({ id: 'FEAT-101', dev: 'Dev 1 (Frontend)', tool: 'Aider', file: 'src/components/LoginModal.tsx' });
+      renderLocks();
+      addLog('Dev 1 claimed FEAT-101 via Aider: Locked LoginModal.tsx', 'text-blue-400');
+    }
+
+    function triggerDev2Action() {
+      const dev2Task = document.getElementById('dev2-task');
+      dev2Task.innerText = 'Auth Core (OpenHands)';
+      activeLocks = activeLocks.filter(l => l.id !== 'AUTH-201');
+      activeLocks.push({ id: 'AUTH-201', dev: 'Dev 2 (Backend)', tool: 'OpenHands', file: 'api/auth.py, models/user.py' });
+      renderLocks();
+      addLog('Dev 2 launched OpenHands sandbox: Locked api/auth.py', 'text-emerald-400');
+      addLog('Dev 2 published API Contract: POST /api/v1/auth/login to Beef memory', 'text-purple-400');
+    }
+
+    function triggerDev3Action() {
+      const dev3Task = document.getElementById('dev3-task');
+      dev3Task.innerText = 'DB Migration (OpenCode)';
+      activeLocks = activeLocks.filter(l => l.id !== 'DATA-301');
+      activeLocks.push({ id: 'DATA-301', dev: 'Dev 3 (Fullstack)', tool: 'OpenCode', file: 'database/migrations/001.sql' });
+      renderLocks();
+      addLog('Dev 3 claimed DATA-301 in OpenCode TUI: Locked 001.sql', 'text-amber-400');
+    }
+
+    function simulateClaimConflict() {
+      addLog('⚠️ CONFLICT REJECTED: Dev 3 attempted to claim api/auth.py while locked by Dev 2!', 'text-red-400 font-bold');
+      alert('⚠️ HackSwarm Advisory Lock Prevented Collision!\n\nDev 3 attempted to edit "api/auth.py", but Dev 2 holds an active lock.\nMerge conflict avoided before any code was written.');
+    }
+
+    function resetBoard() {
+      activeLocks = [];
+      document.getElementById('dev1-task').innerText = 'Idle';
+      document.getElementById('dev2-task').innerText = 'Idle';
+      document.getElementById('dev3-task').innerText = 'Idle';
+      renderLocks();
+      addLog('Board reset by Project Manager. All locks released.', 'text-slate-400');
+    }
+  </script>
+</body>
+</html>
+
