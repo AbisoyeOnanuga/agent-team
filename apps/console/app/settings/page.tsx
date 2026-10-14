@@ -86,7 +86,7 @@ export default function SettingsPage() {
   return (
     <main className="stack">
       <p className="eyebrow">Allowance</p>
-      <h1>Levels</h1>
+      <h1>Access</h1>
       <p className="quiet">
         Current level: {board?.policy.preset || "…"}. Push and secret files never run from the phone.
         {board?.ntfy_enabled ? " A phone buzz is configured." : " No buzz topic is set."}

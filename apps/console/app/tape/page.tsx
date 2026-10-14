@@ -52,7 +52,8 @@ export default function TapePage() {
   return (
     <main>
       <p className="eyebrow">Live</p>
-      <h1>Tape</h1>
+      <h1>Log</h1>
+      <p className="quiet">Each line is something an agent just did.</p>
       <div className="tape" style={{ marginTop: 16 }}>
         {events.length === 0 ? <p className="quiet">Waiting for the first line from the desk.</p> : null}
         {events.map((event) => (

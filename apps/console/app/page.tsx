@@ -49,6 +49,7 @@ export default function BoardPage() {
         <div>
           <p className="eyebrow">Night shift</p>
           <h1>Board</h1>
+          <p className="quiet">Who is working, and what you can hand them next.</p>
         </div>
         <span className={holds ? "pill hold" : "pill"}>{holds} hold</span>
       </header>

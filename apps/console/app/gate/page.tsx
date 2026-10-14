@@ -44,7 +44,8 @@ export default function GatePage() {
   return (
     <main className="stack">
       <p className="eyebrow">Consequential</p>
-      <h1>Gate</h1>
+      <h1>Approve</h1>
+      <p className="quiet">Commits, deletes, and installs wait here until you press Proceed.</p>
       {!gate ? <p className="quiet">Clear board. Routine work is running without you.</p> : null}
       {gate ? (
         <article className="ticket">

@@ -93,7 +93,9 @@ The system comes pre-configured with a **cascading smart fallback router** that 
 
 ## Phone dispatch
 
-The live console is a mobile browser, not the desk visualizer. The PC stays on and runs the hub. The phone joins the same Tailscale tailnet and opens `http://<pc-tailscale-ip>:3000`. Do not port-forward the hub.
+The live console is a mobile browser, not the desk visualizer. The PC stays on and runs both processes below. The phone joins the same Tailscale tailnet and opens `http://<pc-tailscale-ip>:3000`. Do not port-forward it, and do not put this on Vercel: the agents edit repos on the PC, which a serverless host cannot see.
+
+The bottom bar is Board (who is working), Log (what just happened), Approve (waiting decisions), Notes (a message to an agent), and Access (what they may do without asking). Keys are optional. With none set, edits are local dry-runs and the board says the model is offline.
 
 Grok in Cursor stays the desk coding agent. The phone talks to this open stack: FastAPI, SQLite, and Aider. A 3060 laptop can serve Ollama (`qwen2.5:7b-instruct`) if you point `OLLAMA_BASE_URL` at it. The console does not need that GPU.
 

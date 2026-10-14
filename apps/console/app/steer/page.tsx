@@ -34,7 +34,8 @@ export default function SteerPage() {
   return (
     <main>
       <p className="eyebrow">While you walk</p>
-      <h1>Steer</h1>
+      <h1>Notes</h1>
+      <p className="quiet">A short instruction the agent reads on its next edit.</p>
       <form className="card stack" style={{ marginTop: 16 }} onSubmit={onSubmit}>
         <label className="field">
           Agent
