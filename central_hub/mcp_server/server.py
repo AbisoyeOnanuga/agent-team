@@ -1055,8 +1055,16 @@ def _model_configured() -> bool:
         "your_openrouter_api_key_here",
         "your_nvidia_api_key_here",
         "your_opencode_api_key_here",
+        "your_xai_api_key_here",
     }
-    for env_name in ("GEMINI_API_KEY", "MISTRAL_API_KEY", "OPENROUTER_API_KEY", "NVIDIA_API_KEY", "GROQ_API_KEY"):
+    for env_name in (
+        "XAI_API_KEY",
+        "GEMINI_API_KEY",
+        "MISTRAL_API_KEY",
+        "OPENROUTER_API_KEY",
+        "NVIDIA_API_KEY",
+        "GROQ_API_KEY",
+    ):
         value = os.getenv(env_name, "").strip()
         if value and value not in placeholders and not value.startswith("your_"):
             return True

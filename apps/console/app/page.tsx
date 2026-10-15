@@ -2,7 +2,38 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { hub } from "../hub/client";
-import type { Board } from "../hub/types";
+import type { AgentCard, Board } from "../hub/types";
+
+type PixelKind = "idle" | "work" | "hold" | "dry";
+
+const PIXEL_LABEL: Record<PixelKind, string> = {
+  idle: "Idle",
+  work: "Editing",
+  hold: "Waiting",
+  dry: "Dry-run",
+};
+
+function agentState(agent: AgentCard, board: Board | null): PixelKind {
+  const waiting = board?.pending_approvals.some((gate) => gate.agent_id === agent.agent_id);
+  if (waiting) return "hold";
+  if (agent.current_task && agent.tool && agent.tool !== "idle") {
+    return board?.model_offline ? "dry" : "work";
+  }
+  return "idle";
+}
+
+function PixelState({ state }: { state: PixelKind }) {
+  return (
+    <div className="pixel-wrap">
+      <div className="pixel" data-state={state} aria-hidden="true">
+        {Array.from({ length: 25 }, (_, index) => (
+          <i key={index} />
+        ))}
+      </div>
+      <span className="pixel-label">{PIXEL_LABEL[state]}</span>
+    </div>
+  );
+}
 
 export default function BoardPage() {
   const [board, setBoard] = useState<Board | null>(null);
@@ -54,19 +85,22 @@ export default function BoardPage() {
         <span className={holds ? "pill hold" : "pill"}>{holds} hold</span>
       </header>
       {board?.model_offline ? (
-        <p className="banner">Model offline. Edits inside the lock are local dry-runs until a key or Ollama is set.</p>
+        <p className="banner">Model offline. Cursor&apos;s Grok login does not drive this swarm. Add an xAI API key or Ollama, or keep the dry-run.</p>
       ) : null}
       <section className="stack" aria-label="Agents">
-        {(board?.agents ?? []).map((agent) => (
-          <article className="card agent" key={agent.agent_id}>
-            <div>
-              <strong>{agent.name}</strong>
-              <div className="meta">{agent.role}</div>
-              <div className="quiet">{agent.repo_path || "No project folder yet"}</div>
-            </div>
-            <span className="pill">{agent.tool || "idle"}</span>
-          </article>
-        ))}
+        {(board?.agents ?? []).map((agent) => {
+          const state = agentState(agent, board);
+          return (
+            <article className="card agent" key={agent.agent_id}>
+              <div>
+                <strong>{agent.name}</strong>
+                <div className="meta">{agent.role}</div>
+                <div className="quiet">{agent.repo_path || "No project folder yet"}</div>
+              </div>
+              <PixelState state={state} />
+            </article>
+          );
+        })}
       </section>
       <form className="card stack" onSubmit={assign}>
         <h2>Send a task</h2>

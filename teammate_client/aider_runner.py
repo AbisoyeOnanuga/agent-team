@@ -17,7 +17,13 @@ PROVIDER_CONFIGS = {
         "model": "openai/llama-3.3-70b-versatile",
         "api_base": "https://api.groq.com/openai/v1",
         "api_key_env": "GROQ_API_KEY",
-        "desc": "Groq LPU (Ultra-fast, 30 RPM, free)"
+        "desc": "Groq LPU, a different company from xAI Grok"
+    },
+    "grok": {
+        "model": "openai/grok-4",
+        "api_base": "https://api.x.ai/v1",
+        "api_key_env": "XAI_API_KEY",
+        "desc": "xAI Grok API. Separate from the Cursor subscription."
     },
     "gemini": {
         "model": "gemini/gemini-2.0-flash",
@@ -84,6 +90,10 @@ def run_message(
     if provider not in PROVIDER_CONFIGS:
         provider = "gemini"
     config = PROVIDER_CONFIGS[provider]
+    model = config["model"]
+    if provider == "grok":
+        name = os.getenv("XAI_MODEL", "grok-4").strip()
+        model = name if name.startswith("openai/") else f"openai/{name}"
     api_key = os.getenv(config["api_key_env"]) or ""
     if not api_key and provider in ("ollama", "copilot"):
         api_key = "ollama"
@@ -96,7 +106,7 @@ def run_message(
     cmd = [
         "aider",
         "--model",
-        config["model"],
+        model,
         "--openai-api-base",
         config["api_base"],
         "--no-auto-commits",

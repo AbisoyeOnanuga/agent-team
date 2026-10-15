@@ -321,6 +321,85 @@ textarea { min-height: 96px; resize: vertical; }
 
 html[data-theme="light"] .error { color: #9d2b18; }
 
+.pin-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.pin-row button {
+  min-height: 48px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--paper);
+}
+
+.pixel-wrap {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+
+.pixel {
+  display: grid;
+  grid-template-columns: repeat(5, 5px);
+  gap: 2px;
+}
+
+.pixel i {
+  width: 5px;
+  height: 5px;
+  background: var(--line);
+  display: block;
+}
+
+.pixel[data-state="idle"] i:nth-child(13) {
+  background: var(--paper-dim);
+  animation: pixel-blink 2.4s steps(2) infinite;
+}
+
+.pixel[data-state="work"] i:nth-child(3n) {
+  background: var(--amber);
+  animation: pixel-chase 0.9s steps(2) infinite;
+}
+
+.pixel[data-state="work"] i:nth-child(3n + 1) { animation-delay: 0.15s; }
+.pixel[data-state="work"] i:nth-child(3n + 2) { animation-delay: 0.3s; }
+
+.pixel[data-state="dry"] i:nth-child(odd) {
+  background: var(--amber-deep);
+  animation: pixel-chase 1.6s steps(2) infinite;
+}
+
+.pixel[data-state="hold"] i {
+  background: var(--line);
+}
+
+.pixel[data-state="hold"] i:nth-child(7),
+.pixel[data-state="hold"] i:nth-child(8),
+.pixel[data-state="hold"] i:nth-child(9),
+.pixel[data-state="hold"] i:nth-child(12),
+.pixel[data-state="hold"] i:nth-child(13),
+.pixel[data-state="hold"] i:nth-child(14),
+.pixel[data-state="hold"] i:nth-child(17),
+.pixel[data-state="hold"] i:nth-child(18),
+.pixel[data-state="hold"] i:nth-child(19) {
+  background: var(--hold);
+  animation: pixel-blink 0.7s steps(2) infinite;
+}
+
+.pixel-label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pixel i { animation: none; }
+}
+
 .theme-toggle {
   position: fixed;
   top: 12px;
@@ -336,7 +415,7 @@ html[data-theme="light"] .error { color: #9d2b18; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .line, .ticket { animation: none; }
+  .line, .ticket, .pixel i { animation: none; }
 }
 
 @keyframes tape-in {
@@ -347,4 +426,14 @@ html[data-theme="light"] .error { color: #9d2b18; }
 @keyframes hold-pulse {
   0% { box-shadow: 0 0 0 0 rgba(194, 59, 34, 0.45); }
   100% { box-shadow: 0 0 0 14px rgba(194, 59, 34, 0); }
+}
+
+@keyframes pixel-blink {
+  0%, 40% { opacity: 1; }
+  50%, 100% { opacity: 0.2; }
+}
+
+@keyframes pixel-chase {
+  0%, 45% { opacity: 1; }
+  50%, 100% { opacity: 0.15; }
 }

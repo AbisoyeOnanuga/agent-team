@@ -7,6 +7,7 @@ import { hub } from "../../hub/client";
 export default function LoginPage() {
   const router = useRouter();
   const [pin, setPin] = useState("");
+  const [showPin, setShowPin] = useState(false);
   const [error, setError] = useState("");
 
   async function onSubmit(event: FormEvent) {
@@ -32,14 +33,20 @@ export default function LoginPage() {
         <p className="quiet">The agents keep working on the desk machine. This PIN opens the board.</p>
         <label className="field">
           PIN
-          <input
-            inputMode="numeric"
-            autoComplete="current-password"
-            value={pin}
-            onChange={(event) => setPin(event.target.value)}
-            required
-            minLength={4}
-          />
+          <span className="pin-row">
+            <input
+              type={showPin ? "text" : "password"}
+              inputMode="numeric"
+              autoComplete="current-password"
+              value={pin}
+              onChange={(event) => setPin(event.target.value)}
+              required
+              minLength={4}
+            />
+            <button type="button" className="ghost" onClick={() => setShowPin((current) => !current)}>
+              {showPin ? "Hide" : "Show"}
+            </button>
+          </span>
         </label>
         {error ? <p className="error">{error}</p> : null}
         <button className="wide" type="submit">Open the board</button>
