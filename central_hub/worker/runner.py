@@ -291,6 +291,9 @@ def _gate(
 def _edit(task: dict, repo: Path, files: list[str], agent_id: str) -> None:
     notes = store.consume_steers(agent_id, task["id"])
     message = (task.get("prompt") or "").strip()
+    standing = _standing_brief(repo)
+    if standing:
+        message = standing + "\n\nTask:\n" + message
     if notes:
         message += "\n\nOperator notes:\n" + "\n".join(f"- {note}" for note in notes)
     if store.model_configured() and aider_available():
@@ -320,6 +323,14 @@ def _edit(task: dict, repo: Path, files: list[str], agent_id: str) -> None:
             task_id=task["id"],
         )
     _dry_edit(repo, files, message)
+
+
+def _standing_brief(repo: Path) -> str:
+    brief = store.resolve_inside(repo, "HACKSWARM.md")
+    if brief is None or not brief.is_file() or store.is_secret_path("HACKSWARM.md"):
+        return ""
+    text = brief.read_text(encoding="utf-8", errors="replace").strip()
+    return text[:4000]
 
 
 def _dry_edit(repo: Path, files: list[str], message: str) -> None:

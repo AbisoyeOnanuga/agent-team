@@ -112,8 +112,12 @@ def health() -> dict[str, str]:
 def login(body: PinBody, response: Response) -> dict[str, Any]:
     if not store.pin_configured():
         raise HTTPException(status_code=503, detail="Set CONSOLE_PIN before signing in")
+    if store.pin_locked():
+        raise HTTPException(status_code=429, detail="Too many attempts. Wait 15 minutes.")
     if not store.check_pin(body.pin):
+        store.register_pin_failure()
         raise HTTPException(status_code=401, detail="Wrong PIN")
+    store.clear_pin_attempts()
     _cookie(response, store.open_session())
     return {"success": True}
 

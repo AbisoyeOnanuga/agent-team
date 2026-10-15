@@ -24,6 +24,24 @@ def _wait_for(predicate, timeout: float = 8):
     raise AssertionError("timed out")
 
 
+def test_pin_lockout_and_repo_roots(tmp_path: Path, monkeypatch):
+    store.clear_pin_attempts()
+    assert store.pin_locked() is False
+    for _ in range(8):
+        store.register_pin_failure()
+    assert store.pin_locked() is True
+    store.clear_pin_attempts()
+
+    allowed = tmp_path / "projects"
+    allowed.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    monkeypatch.setenv("HACKSWARM_REPO_ROOTS", str(allowed))
+    assert store.repo_allowed(allowed) is True
+    assert store.repo_allowed(outside) is False
+    monkeypatch.delenv("HACKSWARM_REPO_ROOTS", raising=False)
+
+
 def test_pin_policy_and_commit_gate(tmp_path: Path):
     store.init_db()
     store.sync_pin_from_env()

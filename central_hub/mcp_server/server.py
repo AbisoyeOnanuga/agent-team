@@ -183,6 +183,14 @@ def init_db() -> None:
         )
         """
     )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS pin_attempts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
     cursor.execute("SELECT COUNT(*) AS n FROM policy")
     if cursor.fetchone()["n"] == 0:
         for action, mode in PRESETS["routine"].items():
@@ -603,6 +611,8 @@ def set_project_path(agent_id: str, repo_path: str) -> dict[str, Any]:
     folder = Path(repo_path).expanduser()
     if not folder.is_dir():
         return {"success": False, "error": "Project folder does not exist"}
+    if not repo_allowed(folder):
+        return {"success": False, "error": "That folder is outside the allowed project roots"}
     conn = connect()
     conn.execute(
         "UPDATE projects SET repo_path = ? WHERE agent_id = ?",
@@ -955,6 +965,50 @@ def check_pin(pin: str) -> bool:
     if not row:
         return False
     return verify_pin(pin, row["pin_hash"])
+
+
+def _attempt_cutoff() -> str:
+    return (datetime.now(timezone.utc) - timedelta(minutes=15)).isoformat()
+
+
+def pin_locked() -> bool:
+    conn = connect()
+    row = conn.execute(
+        "SELECT COUNT(*) AS n FROM pin_attempts WHERE created_at >= ?",
+        (_attempt_cutoff(),),
+    ).fetchone()
+    conn.close()
+    return int(row["n"]) >= 8
+
+
+def register_pin_failure() -> None:
+    conn = connect()
+    conn.execute("INSERT INTO pin_attempts (created_at) VALUES (?)", (now(),))
+    conn.execute("DELETE FROM pin_attempts WHERE created_at < ?", (_attempt_cutoff(),))
+    conn.commit()
+    conn.close()
+
+
+def clear_pin_attempts() -> None:
+    conn = connect()
+    conn.execute("DELETE FROM pin_attempts")
+    conn.commit()
+    conn.close()
+
+
+def repo_allowed(folder: Path) -> bool:
+    raw = os.getenv("HACKSWARM_REPO_ROOTS", "").strip()
+    if not raw:
+        return True
+    resolved = folder.resolve()
+    for part in raw.split(";"):
+        root = Path(part.strip()).expanduser()
+        if not part.strip():
+            continue
+        root = root.resolve()
+        if resolved == root or resolved.is_relative_to(root):
+            return True
+    return False
 
 
 def open_session() -> str:

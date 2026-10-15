@@ -91,26 +91,40 @@ The system comes pre-configured with a **cascading smart fallback router** that 
 
 ---
 
-## Phone dispatch
+## What this app actually runs
 
-The live console is a mobile browser, not the desk visualizer. The PC stays on and runs both processes below. The phone joins the same Tailscale tailnet and opens `http://<pc-tailscale-ip>:3000`. Do not port-forward it, and do not put this on Vercel: the agents edit repos on the PC, which a serverless host cannot see.
+The sections below this one describe the original fork: OpenHands, OpenCode, LangChain, LiteLLM, Chroma, and several free API accounts. Those are not required. This console does not start them.
 
-The bottom bar is Board (who is working), Log (what just happened), Approve (waiting decisions), Notes (a message to an agent), and Access (what they may do without asking). Keys are optional. With none set, edits are local dry-runs and the board says the model is offline.
+What runs is one worker on the PC, three roles (UI, API, Review), SQLite on the PC, and a phone page. One task runs at a time, which matches a 6 GB GPU. The phone reaches the PC through Tailscale on port 3000. The hub stays on `127.0.0.1:8787` and is not opened to the network. Do not port-forward either port.
 
-Grok in Cursor stays the desk coding agent. The phone talks to this open stack: FastAPI, SQLite, and Aider. A 3060 laptop can serve Ollama (`qwen2.5:7b-instruct`) if you point `OLLAMA_BASE_URL` at it. The console does not need that GPU.
+Cursor's Grok subscription is the desk agent. It is not a key for this swarm. LiteLLM is not used.
+
+Usable model paths:
+
+- No key: dry-run. The app is already functional for queue, log, and approval.
+- Gemini, from Google AI Studio: the fast path. Set `GEMINI_API_KEY` and `HACKSWARM_PROVIDER=gemini`, then `pip install aider-chat`.
+- Ollama on this PC: private and slower. `ollama pull qwen2.5:7b-instruct`, then `HACKSWARM_PROVIDER=ollama`. Expect on the order of a minute per edit, not milliseconds.
+- xAI API key from console.x.ai, only if you want Grok outside Cursor: `XAI_API_KEY` and `HACKSWARM_PROVIDER=grok`.
+
+Skip Mistral, OpenRouter, NVIDIA NIM, OpenCode, Copilot, and Groq.
+
+In Access, set a project folder. Optional: limit folders with `HACKSWARM_REPO_ROOTS=D:\Documents\vscode` in `.env`. Optional standing instructions go in `HACKSWARM.md` inside that project. Each queued task is the instruction for that job.
 
 ```powershell
 pip install -r requirements.txt
-# set CONSOLE_PIN in .env first
-python -m uvicorn central_hub.api.app:app --host 0.0.0.0 --port 8787
+python -m uvicorn central_hub.api.app:app --host 127.0.0.1 --port 8787
 cd apps/console
 npm install
 npm run dev
 ```
 
-Sign in with the PIN. Settings has three allowance levels: Watch, Routine, and Open. Routine edits locked files on its own and waits before a commit, a delete, or an install. Push and secret files never run from the phone. A gate with no answer stays pending.
+Sign in with `CONSOLE_PIN`. Eight wrong attempts lock the console for 15 minutes. Routine edits locked files on its own and waits before a commit, a delete, or an install. Push and secret files never run from the phone.
 
 The diagram in `central_hub/dashboard/visualizer.html` is a desk simulation.
+
+## Phone dispatch
+
+The live console is a mobile browser. The bottom bar is Board, Log, Approve, Notes, and Access.
 
 ## 🚀 Quickstart Guide
 
