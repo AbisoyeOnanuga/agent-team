@@ -40,6 +40,9 @@ export default function SettingsPage() {
   const [board, setBoard] = useState<Board | null>(null);
   const [paths, setPaths] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
+  const [browseId, setBrowseId] = useState("");
+  const [listing, setListing] = useState<{ path: string; parent: string; dirs: string[] } | null>(null);
+  const [browseError, setBrowseError] = useState("");
 
   async function load() {
     const response = await hub("/api/board");
@@ -111,6 +114,34 @@ export default function SettingsPage() {
     }
     setMessage("Project folders saved.");
     await load();
+  }
+
+  async function loadDirs(path: string) {
+    setBrowseError("");
+    const query = path ? `?path=${encodeURIComponent(path)}` : "";
+    const response = await hub(`/api/folders${query}`);
+    if (!response.ok) {
+      if (path) {
+        await loadDirs("");
+        return;
+      }
+      const body = await response.json().catch(() => ({}));
+      setBrowseError(body.detail || "Could not list that folder.");
+      return;
+    }
+    setListing((await response.json()) as { path: string; parent: string; dirs: string[] });
+  }
+
+  async function openBrowse(agentId: string) {
+    setBrowseId(agentId);
+    await loadDirs(paths[agentId] || "");
+  }
+
+  function useFolder() {
+    if (!browseId || !listing) return;
+    setPaths((current) => ({ ...current, [browseId]: listing.path }));
+    setBrowseId("");
+    setListing(null);
   }
 
   async function logout() {
@@ -193,9 +224,35 @@ export default function SettingsPage() {
                 placeholder={hint?.example || "D:\\Documents\\vscode\\project\\src"}
               />
               {warning ? <span className="error">{warning}</span> : null}
+              <button className="ghost" type="button" onClick={() => void openBrowse(agent.agent_id)}>
+                Browse
+              </button>
             </label>
           );
         })}
+        {browseId && listing ? (
+          <div className="card stack">
+            <p className="quiet">{listing.path}</p>
+            {listing.parent ? (
+              <button className="ghost" type="button" onClick={() => void loadDirs(listing.parent)}>
+                Up
+              </button>
+            ) : null}
+            {listing.dirs.length === 0 ? <p className="quiet">No folders inside.</p> : null}
+            {listing.dirs.map((name) => (
+              <button
+                className="ghost"
+                key={name}
+                type="button"
+                onClick={() => void loadDirs(`${listing.path}\\${name}`)}
+              >
+                {name}
+              </button>
+            ))}
+            {browseError ? <p className="error">{browseError}</p> : null}
+            <button type="button" onClick={useFolder}>Use this folder</button>
+          </div>
+        ) : null}
         <button className="wide" type="submit">Save folders</button>
       </form>
       {message ? <p className="quiet">{message}</p> : null}

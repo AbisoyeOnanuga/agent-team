@@ -1,4 +1,4 @@
-"""Run one coding task at a time, and stop before consequential actions."""
+"""Run up to two coding tasks at once, and stop before consequential actions."""
 
 from __future__ import annotations
 
@@ -16,18 +16,46 @@ from central_hub.mcp_server import server as store
 from teammate_client.aider_runner import aider_available, run_message
 
 DEFAULT_FILE = ".hackswarm/notes.md"
+ROLE_BRIEFS = {
+    "agent-ui": (
+        "You are the interface worker. Change layout, copy, and client behavior "
+        "only inside the locked files. Do not edit the server, the database, or secrets."
+    ),
+    "agent-api": (
+        "You are the services worker. Change handlers, routes, and data access "
+        "only inside the locked files. Do not restyle the interface or touch secrets."
+    ),
+    "agent-review": (
+        "You are the review worker. Read the shared note of earlier changes, then "
+        "fix breaks inside the locked files. Do not widen the task or rewrite the other role's work."
+    ),
+}
+_GIT_LOCKS: dict[str, threading.Lock] = {}
+_GIT_GUARD = threading.Lock()
 
 
 def worker_loop(stop: Optional[threading.Event] = None) -> None:
+    running: list[threading.Thread] = []
     while stop is None or not stop.is_set():
+        running = [thread for thread in running if thread.is_alive()]
         try:
-            process_available()
+            if len(running) < 2 and store.next_todo() and store.peek_free_provider():
+                thread = threading.Thread(target=_safe_process, name="hackswarm-lane", daemon=True)
+                running.append(thread)
+                thread.start()
         except Exception as exc:
             store.record_event(f"Worker error: {exc}", kind="error")
-        if stop is not None and stop.wait(1.2):
+        if stop is not None and stop.wait(0.8):
             return
         if stop is None:
-            time.sleep(1.2)
+            time.sleep(0.8)
+
+
+def _safe_process() -> None:
+    try:
+        process_available()
+    except Exception as exc:
+        store.record_event(f"Worker error: {exc}", kind="error")
 
 
 def process_available() -> None:
@@ -63,17 +91,17 @@ def process_available() -> None:
     name = project["name"] if project else agent_id
     claimed = store.claim_task(task["id"], agent_id, name, files)
     if not claimed.get("success"):
-        store.record_event_once(
-            claimed.get("error", "Could not claim the task"),
-            kind="error",
-            agent_id=agent_id,
-            task_id=task["id"],
-        )
+        reason = claimed.get("error", "Could not claim the task")
+        if reason in {"Task is not waiting", "Both models are already working"}:
+            return
+        store.record_event_once(reason, kind="error", agent_id=agent_id, task_id=task["id"])
         return
+    task = store.get_task(task["id"]) or task
+    lane = task.get("provider") or "model"
 
     store.touch_agent(agent_id, "aider", task["id"])
     store.record_event(
-        f"Claimed {', '.join(files)}",
+        f"{lane} claimed {', '.join(files)}",
         kind="log",
         agent_id=agent_id,
         task_id=task["id"],
@@ -226,6 +254,7 @@ def _run_steps(task: dict, repo: Path, files: list[str], agent_id: str) -> None:
             agent_id=agent_id,
             task_id=task_id,
         )
+        _buzz(f"{agent_id} finished", "The task is done. Open Approve if anything is still waiting.")
 
 
 def _gate(
@@ -290,23 +319,31 @@ def _gate(
 def _edit(task: dict, repo: Path, files: list[str], agent_id: str) -> None:
     notes = store.consume_steers(agent_id, task["id"])
     message = (task.get("prompt") or "").strip()
+    brief = ROLE_BRIEFS.get(agent_id, "")
+    if brief:
+        message = brief + "\n\nTask:\n" + message
     standing = _standing_brief(repo)
     if standing:
-        message = standing + "\n\nTask:\n" + message
+        message = standing + "\n\n" + message
+    shared = _read_shared(repo)
+    if shared:
+        message += "\n\nWhat the other workers already changed:\n" + shared
     if notes:
         message += "\n\nOperator notes:\n" + "\n".join(f"- {note}" for note in notes)
+    provider = task.get("provider") or store.active_provider()
     if store.model_configured() and aider_available():
         def on_line(line: str) -> None:
             store.record_event(line, kind="log", agent_id=agent_id, task_id=task["id"])
 
         code = run_message(
-            provider=store.active_provider(),
+            provider=provider,
             files=files,
             message=message,
             cwd=repo,
             on_line=on_line,
         )
         if code == 0:
+            _write_shared(repo, task, agent_id, files)
             return
         store.record_event(
             "Aider did not finish. A dry-run note was written inside the lock instead.",
@@ -322,6 +359,7 @@ def _edit(task: dict, repo: Path, files: list[str], agent_id: str) -> None:
             task_id=task["id"],
         )
     _dry_edit(repo, files, message)
+    _write_shared(repo, task, agent_id, files)
 
 
 def _standing_brief(repo: Path) -> str:
@@ -410,12 +448,76 @@ def _tests(repo: Path, agent_id: str, task_id: str) -> None:
     )
 
 
+def _git_root(repo: Path) -> Optional[Path]:
+    current = repo.resolve()
+    for candidate in (current, *current.parents):
+        if (candidate / ".git").is_dir():
+            return candidate
+        if candidate == store.workspace_root():
+            break
+    return None
+
+
+def _git_lock(root: Path) -> threading.Lock:
+    key = str(root)
+    with _GIT_GUARD:
+        lock = _GIT_LOCKS.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _GIT_LOCKS[key] = lock
+        return lock
+
+
+def _paths_from_root(root: Path, repo: Path, files: list[str]) -> list[str]:
+    paths: list[str] = []
+    for rel in files:
+        full = (repo / rel).resolve()
+        paths.append(full.relative_to(root).as_posix())
+    return paths
+
+
+def _shared_file(repo: Path) -> Optional[Path]:
+    root = _git_root(repo) or repo
+    return store.resolve_inside(root, ".hackswarm/shared.md")
+
+
+def _read_shared(repo: Path) -> str:
+    path = _shared_file(repo)
+    if path is None or not path.is_file():
+        return ""
+    text = path.read_text(encoding="utf-8", errors="replace").strip()
+    return text[-2000:]
+
+
+def _write_shared(repo: Path, task: dict, agent_id: str, files: list[str]) -> None:
+    path = _shared_file(repo)
+    if path is None:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lane = task.get("provider") or "model"
+    line = (
+        f"{store.now()} {agent_id} ({lane}) finished '{task.get('title') or 'task'}'. "
+        f"Touched: {', '.join(files)}.\n"
+    )
+    lock = _git_lock(_git_root(repo) or repo)
+    with lock:
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(line)
+    store.record_event(
+        "Wrote the shared note so the other worker can see this change.",
+        kind="notify",
+        agent_id=agent_id,
+        task_id=task["id"],
+    )
+
+
 def _diff_stat(repo: Path, files: list[str]) -> str:
-    if not (repo / ".git").is_dir():
+    root = _git_root(repo)
+    if root is None:
         return "This folder is not a git repo. Proceed writes a commit note. Nothing is pushed."
     shown = subprocess.run(
-        ["git", "status", "--short", "--", *files],
-        cwd=repo,
+        ["git", "status", "--short", "--", *_paths_from_root(root, repo, files)],
+        cwd=root,
         capture_output=True,
         text=True,
         timeout=20,
@@ -425,7 +527,8 @@ def _diff_stat(repo: Path, files: list[str]) -> str:
 
 
 def _commit(repo: Path, files: list[str], title: str, agent_id: str, task_id: str) -> None:
-    if not (repo / ".git").is_dir():
+    root = _git_root(repo)
+    if root is None:
         note = store.resolve_inside(repo, ".hackswarm/commit-request.txt")
         if note is None:
             return
@@ -438,6 +541,13 @@ def _commit(repo: Path, files: list[str], title: str, agent_id: str, task_id: st
             task_id=task_id,
         )
         return
+    with _git_lock(root):
+        _commit_locked(root, _paths_from_root(root, repo, files), title, agent_id, task_id)
+
+
+def _commit_locked(
+    repo: Path, files: list[str], title: str, agent_id: str, task_id: str
+) -> None:
     env = os.environ.copy()
     identity = subprocess.run(
         ["git", "config", "user.name"],

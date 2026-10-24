@@ -240,12 +240,35 @@ textarea { min-height: 96px; resize: vertical; }
   border-color: var(--amber);
 }
 
+@media (hover: hover) {
+  .nav a[aria-current="page"]:hover {
+    background: var(--paper);
+    color: var(--ink);
+    border-color: var(--paper);
+  }
+}
+
 .tape {
   display: grid;
   gap: 8px;
   max-height: calc(100dvh - 190px);
   margin-top: 16px;
   overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--amber) transparent;
+}
+
+.tape::-webkit-scrollbar {
+  width: 6px;
+}
+
+.tape::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tape::-webkit-scrollbar-thumb {
+  background: var(--amber);
+  border-radius: 99px;
 }
 
 .line {

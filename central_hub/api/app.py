@@ -211,6 +211,15 @@ def choose_model(request: Request, body: ModelBody) -> dict[str, Any]:
     return result
 
 
+@app.get("/api/folders")
+def folders(request: Request, path: str = "") -> dict[str, Any]:
+    _require(request)
+    listing = store.list_workspace_dirs(path)
+    if not listing.get("ok"):
+        raise HTTPException(status_code=400, detail=listing.get("error", "Rejected"))
+    return listing
+
+
 @app.post("/api/tasks")
 def create_task(request: Request, body: TaskBody) -> dict[str, Any]:
     _require(request)

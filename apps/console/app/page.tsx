@@ -41,6 +41,10 @@ export default function BoardPage() {
   const [title, setTitle] = useState("");
   const [prompt, setPrompt] = useState("");
   const [agentId, setAgentId] = useState("agent-ui");
+  const [second, setSecond] = useState(false);
+  const [title2, setTitle2] = useState("");
+  const [prompt2, setPrompt2] = useState("");
+  const [agent2, setAgent2] = useState("agent-api");
 
   async function load() {
     const response = await hub("/api/board");
@@ -58,17 +62,30 @@ export default function BoardPage() {
   async function assign(event: FormEvent) {
     event.preventDefault();
     setError("");
-    const response = await hub("/api/tasks", {
-      method: "POST",
-      body: JSON.stringify({ title, prompt, agent_id: agentId, files: [] }),
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({}));
-      setError(body.detail || "The task was not queued.");
-      return;
+    const jobs = [{ title, prompt, agent_id: agentId }];
+    if (second) {
+      if (agent2 === agentId) {
+        setError("Pick two different roles. A role works one folder at a time.");
+        return;
+      }
+      jobs.push({ title: title2, prompt: prompt2, agent_id: agent2 });
+    }
+    for (const job of jobs) {
+      const response = await hub("/api/tasks", {
+        method: "POST",
+        body: JSON.stringify({ ...job, files: [] }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        setError(body.detail || "The task was not queued.");
+        return;
+      }
     }
     setTitle("");
     setPrompt("");
+    setTitle2("");
+    setPrompt2("");
+    setSecond(false);
     await load();
   }
 
@@ -86,7 +103,7 @@ export default function BoardPage() {
       </header>
       {board?.provider ? (
         <p className="quiet">
-          Model: {board.provider === "ollama" ? `local ${board.ollama_model}` : "Gemini"}. Switch it in Access.
+          First model: {board.provider === "ollama" ? `local ${board.ollama_model}` : "Gemini"}. A second role uses the other model. Switch the first in Access.
         </p>
       ) : null}
       {board?.model_offline ? (
@@ -119,7 +136,17 @@ export default function BoardPage() {
         </label>
         <label className="field">
           Agent
-          <select value={agentId} onChange={(event) => setAgentId(event.target.value)}>
+          <select
+            value={agentId}
+            onChange={(event) => {
+              const next = event.target.value;
+              setAgentId(next);
+              if (next === agent2) {
+                const other = (board?.agents ?? []).find((agent) => agent.agent_id !== next);
+                if (other) setAgent2(other.agent_id);
+              }
+            }}
+          >
             {(board?.agents ?? []).map((agent) => (
               <option key={agent.agent_id} value={agent.agent_id}>
                 {agent.name}
@@ -127,8 +154,35 @@ export default function BoardPage() {
             ))}
           </select>
         </label>
+        <button className="ghost" type="button" onClick={() => setSecond((open) => !open)}>
+          {second ? "One role only" : "Add a second role"}
+        </button>
+        {second ? (
+          <>
+            <label className="field">
+              Second title
+              <input value={title2} onChange={(event) => setTitle2(event.target.value)} required />
+            </label>
+            <label className="field">
+              What the second role should change
+              <textarea value={prompt2} onChange={(event) => setPrompt2(event.target.value)} required />
+            </label>
+            <label className="field">
+              Second agent
+              <select value={agent2} onChange={(event) => setAgent2(event.target.value)}>
+                {(board?.agents ?? [])
+                  .filter((agent) => agent.agent_id !== agentId)
+                  .map((agent) => (
+                    <option key={agent.agent_id} value={agent.agent_id}>
+                      {agent.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          </>
+        ) : null}
         {error ? <p className="error">{error}</p> : null}
-        <button className="wide" type="submit">Queue it</button>
+        <button className="wide" type="submit">{second ? "Queue both" : "Queue it"}</button>
       </form>
     </main>
   );

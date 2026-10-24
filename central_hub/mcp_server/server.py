@@ -82,6 +82,7 @@ def init_db() -> None:
     _ensure_column(cursor, "tasks", "prompt", "TEXT")
     _ensure_column(cursor, "tasks", "repo_path", "TEXT")
     _ensure_column(cursor, "tasks", "requested_files", "TEXT")
+    _ensure_column(cursor, "tasks", "provider", "TEXT")
 
     cursor.execute(
         """
@@ -356,7 +357,7 @@ def create_task(
     known = {agent["agent_id"] for agent in AGENTS}
     if agent_id not in known:
         return {"success": False, "error": "Unknown agent"}
-    clean_files = files or [".hackswarm/notes.md"]
+    clean_files = files or [_role_note(agent_id)]
     for rel in clean_files:
         if is_secret_path(rel):
             return {"success": False, "error": "Secret files stay at the desk"}
@@ -399,6 +400,50 @@ def create_task(
     return {"success": True, "task_id": task_id}
 
 
+def _role_note(agent_id: str) -> str:
+    return {
+        "agent-ui": ".hackswarm/ui.md",
+        "agent-api": ".hackswarm/api.md",
+        "agent-review": ".hackswarm/review.md",
+    }.get(agent_id, ".hackswarm/notes.md")
+
+
+def lane_ready(name: str) -> bool:
+    if name == "ollama":
+        return True
+    if name != "gemini":
+        return False
+    value = os.getenv("GEMINI_API_KEY", "").strip()
+    return bool(value) and not value.startswith("your_")
+
+
+def _free_provider(cursor: sqlite3.Cursor) -> Optional[str]:
+    busy = {
+        row["provider"]
+        for row in cursor.execute(
+            """
+            SELECT provider FROM tasks
+            WHERE status = 'IN_PROGRESS' AND provider IS NOT NULL AND provider != ''
+            """
+        )
+    }
+    first = active_provider()
+    if first not in ("gemini", "ollama"):
+        first = "gemini"
+    second = "ollama" if first == "gemini" else "gemini"
+    for lane in (first, second):
+        if lane not in busy and lane_ready(lane):
+            return lane
+    return None
+
+
+def peek_free_provider() -> Optional[str]:
+    conn = connect()
+    provider = _free_provider(conn.cursor())
+    conn.close()
+    return provider
+
+
 def claim_task(
     task_id: str,
     agent_id: str,
@@ -425,15 +470,19 @@ def claim_task(
             "conflicts": conflict_files,
         }
 
+    provider = _free_provider(cursor)
+    if not provider:
+        conn.close()
+        return {"success": False, "error": "Both models are already working"}
     stamp = now()
     cursor.execute(
         """
         UPDATE tasks
         SET status = 'IN_PROGRESS', assigned_agent = ?, assigned_dev = ?,
-            locked_files = ?, updated_at = ?
+            locked_files = ?, provider = ?, updated_at = ?
         WHERE id = ? AND status = 'TODO'
         """,
-        (agent_id, teammate_name, json.dumps(files_to_lock), stamp, task_id),
+        (agent_id, teammate_name, json.dumps(files_to_lock), provider, stamp, task_id),
     )
     if cursor.rowcount != 1:
         conn.close()
@@ -523,6 +572,9 @@ def next_todo() -> Optional[dict[str, Any]]:
         """
         SELECT * FROM tasks
         WHERE status = 'TODO' AND assigned_agent IS NOT NULL
+          AND assigned_agent NOT IN (
+            SELECT assigned_agent FROM tasks WHERE status = 'IN_PROGRESS'
+          )
         ORDER BY created_at ASC LIMIT 1
         """
     ).fetchone()
@@ -544,6 +596,7 @@ def _task_dict(row: sqlite3.Row) -> dict[str, Any]:
         "prompt": row["prompt"],
         "repo_path": row["repo_path"],
         "requested_files": json.loads(row["requested_files"] or "[]"),
+        "provider": row["provider"] if "provider" in row.keys() else None,
     }
 
 
@@ -1020,6 +1073,57 @@ def clear_pin_attempts() -> None:
     conn.execute("DELETE FROM pin_attempts")
     conn.commit()
     conn.close()
+
+
+def workspace_root() -> Path:
+    raw = os.getenv("HACKSWARM_WORKSPACE", r"D:\Documents\vscode").strip()
+    return Path(raw).expanduser().resolve()
+
+
+def list_workspace_dirs(folder: str) -> dict[str, Any]:
+    root = workspace_root()
+    if not root.is_dir():
+        return {"ok": False, "error": "Workspace folder is missing"}
+    target = Path(folder).expanduser() if folder.strip() else root
+    if not target.is_absolute():
+        target = root / target
+    try:
+        resolved = target.resolve()
+    except OSError:
+        return {"ok": False, "error": "That folder cannot be opened"}
+    if resolved != root and not resolved.is_relative_to(root):
+        return {"ok": False, "error": "Stay inside the workspace"}
+    if not resolved.is_dir():
+        return {"ok": False, "error": "That path is not a folder"}
+    skip = {
+        ".git",
+        "node_modules",
+        ".venv",
+        ".next",
+        "__pycache__",
+        "dist",
+        "build",
+    }
+    names = []
+    try:
+        children = list(resolved.iterdir())
+    except OSError:
+        return {"ok": False, "error": "That folder cannot be listed"}
+    for child in children:
+        if not child.is_dir():
+            continue
+        if child.name in skip or child.name.startswith("."):
+            continue
+        if is_secret_path(child.name):
+            continue
+        names.append(child.name)
+    parent = "" if resolved == root else str(resolved.parent)
+    return {
+        "ok": True,
+        "path": str(resolved),
+        "parent": parent,
+        "dirs": sorted(names, key=str.lower),
+    }
 
 
 def repo_allowed(folder: Path) -> bool:
