@@ -95,15 +95,28 @@ The system comes pre-configured with a **cascading smart fallback router** that 
 
 The sections below this one describe the original fork: OpenHands, OpenCode, LangChain, LiteLLM, Chroma, and several free API accounts. Those are not required. This console does not start them.
 
-What runs is one worker on the PC, three roles (UI, API, Review), SQLite on the PC, and a phone page. One task runs at a time, which matches a 6 GB GPU. The phone reaches the PC through Tailscale on port 3000. The hub stays on `127.0.0.1:8787` and is not opened to the network. Do not port-forward either port.
+What runs is one worker on the PC, three inboxes (UI, API, Review), SQLite on the PC, and a phone page. One task runs at a time, which matches a 6 GB GPU. The phone reaches the PC through Tailscale on port 3000. The hub stays on `127.0.0.1:8797` and is not opened to the network. Port 8787 is left for other local apps. Do not port-forward either port.
+
+### How to use UI, API, and Review
+
+These are three queues, not three models. They share one editor and one active model (Gemini or local `gemma3:4b`, chosen in Access). The difference is which inbox you hand the task to, and which folder that inbox is bound to.
+
+1. In Access, set a folder for each role. The same project folder can be used for all three.
+2. On the Board, write the task and choose UI, API, or Review before sending it.
+3. The worker takes the next queued task only. A second role waits until the first task is closed.
+4. Put the role in the task text. Example: "UI: change the map caption." The model does not get a separate persona unless the task says so.
+5. Optional standing rules go in `HACKSWARM.md` in that project. The worker reads the first 4000 characters on every task.
+6. If you leave the file list empty, the edit is limited to `.hackswarm/notes.md` in the project. Name a source file in the task when you want the running app to change.
+
+Watch the lamp on that card and the Log. Approve is where a held action waits. With Access on Open, a commit can land without waiting. Routine waits before a commit, a delete, or an install. Push never runs from the phone.
 
 Cursor's Grok subscription is the desk agent. It is not a key for this swarm. LiteLLM is not used.
 
 Usable model paths:
 
 - No key: dry-run. The app is already functional for queue, log, and approval.
-- Gemini, from Google AI Studio: the fast path. Set `GEMINI_API_KEY` and `HACKSWARM_PROVIDER=gemini`, then `pip install aider-chat`.
-- Ollama on this PC: private and slower. `ollama pull qwen2.5:7b-instruct`, then `HACKSWARM_PROVIDER=ollama`. Expect on the order of a minute per edit, not milliseconds.
+- Gemini, from Google AI Studio: the fast path. Set `GEMINI_API_KEY` and `HACKSWARM_PROVIDER=gemini`. The editor model is `gemini-3.8-flash`. Aider runs from the project's Python 3.12 `.venv`, because Aider does not install on Python 3.13.
+- Ollama on this PC: private and slower. The local model is `gemma3:4b`. Switch to it from Access. `deepseek-r1:8b` stays unused because it is the slow one. Expect tens of seconds per edit, not milliseconds.
 - xAI API key from console.x.ai, only if you want Grok outside Cursor: `XAI_API_KEY` and `HACKSWARM_PROVIDER=grok`.
 
 Skip Mistral, OpenRouter, NVIDIA NIM, OpenCode, Copilot, and Groq.
@@ -112,7 +125,7 @@ In Access, set a project folder. Optional: limit folders with `HACKSWARM_REPO_RO
 
 ```powershell
 pip install -r requirements.txt
-python -m uvicorn central_hub.api.app:app --host 127.0.0.1 --port 8787
+python -m uvicorn central_hub.api.app:app --host 127.0.0.1 --port 8797
 cd apps/console
 npm install
 npm run dev

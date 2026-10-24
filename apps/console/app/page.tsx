@@ -84,6 +84,11 @@ export default function BoardPage() {
         </div>
         <span className={holds ? "pill hold" : "pill"}>{holds} hold</span>
       </header>
+      {board?.provider ? (
+        <p className="quiet">
+          Model: {board.provider === "ollama" ? `local ${board.ollama_model}` : "Gemini"}. Switch it in Access.
+        </p>
+      ) : null}
       {board?.model_offline ? (
         <p className="banner">Model offline. Cursor&apos;s Grok login does not drive this swarm. Add an xAI API key or Ollama, or keep the dry-run.</p>
       ) : null}

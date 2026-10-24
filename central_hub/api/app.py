@@ -53,6 +53,10 @@ class SteerBody(BaseModel):
     task_id: Optional[str] = None
 
 
+class ModelBody(BaseModel):
+    provider: str
+
+
 @asynccontextmanager
 async def _lifespan(_: FastAPI):
     from teammate_client.aider_runner import load_env
@@ -194,6 +198,15 @@ def write_policy(request: Request, body: PolicyBody) -> dict[str, Any]:
             raise HTTPException(status_code=400, detail=result.get("error", "Rejected"))
         return result
     raise HTTPException(status_code=400, detail="Send a preset or an action and mode")
+
+
+@app.put("/api/model")
+def choose_model(request: Request, body: ModelBody) -> dict[str, Any]:
+    _require(request)
+    result = store.set_active_provider(body.provider)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Rejected"))
+    return result
 
 
 @app.post("/api/tasks")

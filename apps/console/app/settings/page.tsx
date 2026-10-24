@@ -31,6 +31,19 @@ export default function SettingsPage() {
     void load();
   }, []);
 
+  async function chooseModel(provider: string) {
+    setMessage("");
+    const response = await hub("/api/model", {
+      method: "PUT",
+      body: JSON.stringify({ provider }),
+    });
+    if (!response.ok) {
+      setMessage("That model was not selected.");
+      return;
+    }
+    await load();
+  }
+
   async function preset(name: string) {
     setMessage("");
     const response = await hub("/api/policy", {
@@ -91,6 +104,22 @@ export default function SettingsPage() {
         Current level: {board?.policy.preset || "…"}. Push and secret files never run from the phone.
         {board?.ntfy_enabled ? " A phone buzz is configured." : " No buzz topic is set."}
       </p>
+      <div className="actions">
+        <button
+          className={board?.provider === "gemini" ? "" : "ghost"}
+          type="button"
+          onClick={() => void chooseModel("gemini")}
+        >
+          Gemini
+        </button>
+        <button
+          className={board?.provider === "ollama" ? "" : "ghost"}
+          type="button"
+          onClick={() => void chooseModel("ollama")}
+        >
+          Local {board?.ollama_model || "gemma3:4b"}
+        </button>
+      </div>
       <div className="actions">
         {["watch", "routine", "open"].map((name) => (
           <button

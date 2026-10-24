@@ -27,7 +27,7 @@ export default function LoginPage() {
 
   return (
     <main className="login">
-      <form className="card stack" onSubmit={onSubmit}>
+      <form className="card stack" method="post" onSubmit={onSubmit}>
         <p className="eyebrow">Field radio</p>
         <h1>Dispatch</h1>
         <p className="quiet">The agents keep working on the desk machine. This PIN opens the board.</p>
@@ -35,9 +35,13 @@ export default function LoginPage() {
           PIN
           <span className="pin-row">
             <input
+              key={showPin ? "pin-shown" : "pin-masked"}
+              name="pin"
               type={showPin ? "text" : "password"}
               inputMode="numeric"
-              autoComplete="current-password"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
               value={pin}
               onChange={(event) => setPin(event.target.value)}
               required

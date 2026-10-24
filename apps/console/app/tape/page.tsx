@@ -11,14 +11,22 @@ export default function TapePage() {
     let after = 0;
     let source: EventSource | null = null;
     let poll = 0;
-    const seen = new Set<number>();
+    let cancelled = false;
 
     function push(rows: TapeEvent[]) {
-      const fresh = rows.filter((row) => !seen.has(row.id));
-      fresh.forEach((row) => seen.add(row.id));
-      if (!fresh.length) return;
-      after = fresh[fresh.length - 1].id;
-      setEvents((current) => [...current, ...fresh].slice(-80));
+      if (cancelled) return;
+      setEvents((current) => {
+        const ids = new Set(current.map((row) => row.id));
+        const fresh: TapeEvent[] = [];
+        for (const row of rows) {
+          if (ids.has(row.id)) continue;
+          ids.add(row.id);
+          fresh.push(row);
+        }
+        if (!fresh.length) return current;
+        after = fresh[fresh.length - 1].id;
+        return [...current, ...fresh].slice(-80);
+      });
     }
 
     async function pull() {
@@ -43,6 +51,7 @@ export default function TapePage() {
     }
     const backup = window.setInterval(() => void pull(), 4000);
     return () => {
+      cancelled = true;
       source?.close();
       window.clearInterval(poll);
       window.clearInterval(backup);

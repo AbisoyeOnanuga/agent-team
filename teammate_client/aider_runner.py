@@ -5,6 +5,7 @@ Configures Aider to run with zero-cost models from free-llm.com or local Ollama,
 pre-loading task context from the Central MCP hub.
 """
 
+import importlib.util
 import os
 import sys
 import argparse
@@ -26,7 +27,7 @@ PROVIDER_CONFIGS = {
         "desc": "xAI Grok API. Separate from the Cursor subscription."
     },
     "gemini": {
-        "model": "gemini/gemini-2.0-flash",
+        "model": "gemini/gemini-3.8-flash",
         "api_base": "https://generativelanguage.googleapis.com/v1beta/openai/",
         "api_key_env": "GEMINI_API_KEY",
         "desc": "Google AI Studio (1M context, free)"
@@ -44,10 +45,10 @@ PROVIDER_CONFIGS = {
         "desc": "OpenRouter Free tier models"
     },
     "ollama": {
-        "model": f"ollama/{os.getenv('OLLAMA_CODE_MODEL', 'qwen2.5:7b-instruct')}",
-        "api_base": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434") + "/v1",
+        "model": "ollama/gemma3:4b",
+        "api_base": "http://127.0.0.1:11434/v1",
         "api_key_env": "OLLAMA_API_KEY",
-        "desc": "Local Ollama on GTX 1660 (qwen2.5:7b-instruct, 100% offline)"
+        "desc": "Local Ollama. gemma3:4b fits a 6GB GPU; deepseek-r1:8b stays unused."
     },
     "copilot": {
         "model": "openai/gpt-4o",
@@ -71,10 +72,38 @@ def load_env():
                     if k not in os.environ and v:
                         os.environ[k] = v
 
-def aider_available() -> bool:
-    from shutil import which
+def _aider_python() -> list[str]:
+    root = Path(__file__).resolve().parents[1]
+    candidate = root / ".venv" / "Scripts" / "python.exe"
+    if candidate.is_file():
+        return [str(candidate)]
+    return [sys.executable]
 
-    return which("aider") is not None
+
+def aider_available() -> bool:
+    python = _aider_python()
+    if python[0] != sys.executable:
+        try:
+            probe = subprocess.run(
+                [*python, "-c", "import aider"],
+                capture_output=True,
+                timeout=30,
+                check=False,
+            )
+            return probe.returncode == 0
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+    return importlib.util.find_spec("aider") is not None
+
+
+def _ollama_model() -> str:
+    name = os.getenv("OLLAMA_CODE_MODEL", "gemma3:4b").strip() or "gemma3:4b"
+    return name if name.startswith("ollama/") else f"ollama/{name}"
+
+
+def _ollama_base() -> str:
+    base = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/")
+    return base + "/v1"
 
 
 def run_message(
@@ -89,7 +118,10 @@ def run_message(
     load_env()
     if provider not in PROVIDER_CONFIGS:
         provider = "gemini"
-    config = PROVIDER_CONFIGS[provider]
+    config = dict(PROVIDER_CONFIGS[provider])
+    if provider == "ollama":
+        config["model"] = _ollama_model()
+        config["api_base"] = _ollama_base()
     model = config["model"]
     if provider == "grok":
         name = os.getenv("XAI_MODEL", "grok-4").strip()
@@ -104,12 +136,15 @@ def run_message(
     env["OPENAI_API_BASE"] = config["api_base"]
     env["OPENAI_API_KEY"] = api_key
     cmd = [
+        *_aider_python(),
+        "-m",
         "aider",
         "--model",
         model,
         "--openai-api-base",
         config["api_base"],
         "--no-auto-commits",
+        "--no-gitignore",
         "--yes",
         "--message",
         message,
@@ -131,7 +166,8 @@ def run_message(
         text = line.strip()
         if text and api_key not in text:
             on_line(text)
-    return proc.wait(timeout=180)
+    limit = 600 if provider == "ollama" else 180
+    return proc.wait(timeout=limit)
 
 
 def main():

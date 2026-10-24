@@ -51,5 +51,7 @@ export type Board = {
   events: TapeEvent[];
   policy: PolicyState;
   model_offline: boolean;
+  provider: string;
+  ollama_model: string;
   ntfy_enabled: boolean;
 };

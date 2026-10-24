@@ -301,7 +301,7 @@ def _edit(task: dict, repo: Path, files: list[str], agent_id: str) -> None:
             store.record_event(line, kind="log", agent_id=agent_id, task_id=task["id"])
 
         code = run_message(
-            provider=os.getenv("HACKSWARM_PROVIDER", "gemini"),
+            provider=store.active_provider(),
             files=files,
             message=message,
             cwd=repo,

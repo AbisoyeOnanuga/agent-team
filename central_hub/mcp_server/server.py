@@ -191,6 +191,14 @@ def init_db() -> None:
         )
         """
     )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+        """
+    )
     cursor.execute("SELECT COUNT(*) AS n FROM policy")
     if cursor.fetchone()["n"] == 0:
         for action, mode in PRESETS["routine"].items():
@@ -1063,6 +1071,8 @@ def board_snapshot() -> dict[str, Any]:
         "events": list_events(after=0, limit=40)[-40:],
         "policy": policy,
         "model_offline": not model_configured(),
+        "provider": active_provider(),
+        "ollama_model": ollama_model_name(),
         "ntfy_enabled": bool(os.getenv("NTFY_TOPIC", "").strip()),
     }
 
@@ -1095,6 +1105,36 @@ def _agent_task(agent_id: str) -> Optional[str]:
     ).fetchone()
     conn.close()
     return row["current_task"] if row else None
+
+
+def ollama_model_name() -> str:
+    return os.getenv("OLLAMA_CODE_MODEL", "gemma3:4b").strip() or "gemma3:4b"
+
+
+def active_provider() -> str:
+    conn = connect()
+    row = conn.execute("SELECT value FROM settings WHERE key = 'provider'").fetchone()
+    conn.close()
+    if row and row["value"] in ("gemini", "ollama"):
+        return row["value"]
+    env = os.getenv("HACKSWARM_PROVIDER", "gemini").strip().lower()
+    return env if env in ("gemini", "ollama") else "gemini"
+
+
+def set_active_provider(name: str) -> dict[str, Any]:
+    if name not in ("gemini", "ollama"):
+        return {"success": False, "error": "Choose Gemini or the local Ollama model."}
+    conn = connect()
+    conn.execute(
+        """
+        INSERT INTO settings (key, value) VALUES ('provider', ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        """,
+        (name,),
+    )
+    conn.commit()
+    conn.close()
+    return {"success": True, "provider": name}
 
 
 def model_configured() -> bool:
@@ -1134,4 +1174,4 @@ if __name__ == "__main__":
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
     print(f"[*] HackSwarm database ready at {db_path()}")
-    print("[*] Phone console API: python -m uvicorn central_hub.api.app:app --host 0.0.0.0 --port 8787")
+    print("[*] Phone console API: python -m uvicorn central_hub.api.app:app --host 127.0.0.1 --port 8797")
