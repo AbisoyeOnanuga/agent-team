@@ -1,180 +1,149 @@
-# 🤖 HackSwarm: Multi-Agent Team Collaboration Platform
+# HackSwarm agent team
 
-> **Hacktoberfest / Hackathon Multi-Agent Swarm Orchestrator**
-> Powered by **MCP (Model Context Protocol)**, **LangChain**, **OpenHands**, **Aider**, and **Ollama**.
+Run this on your own laptop. Open it in a browser on that laptop and on your phone. Tailscale connects your phone to your laptop. It does not connect you to anyone else's computer. Your API keys stay in a local `.env` file. Your Python install stays in a local `.venv` folder. Git does not upload either one.
 
----
+Follow the steps in order. Each step is required unless it says optional.
 
-## 🎯 Project Vision
-In high-stakes hackathons, teammates often suffer from code fragmentation, merge conflicts, and redundant work when using isolated AI coding assistants. 
+## 1. Install the programs
 
-**HackSwarm** solves this by establishing a **central coordination hub** hosted on the team's powerhouse laptop:
-- **Unified Memory & State**: Centralized task backlog, vector search over project documentation, and live API schemas.
-- **MCP Server Fabric**: Teammate AI agents communicate via standard Model Context Protocol tools (`claim_task`, `publish_contract`, `query_memory`, `broadcast_status`).
-- **Flexible Execution Engines**: Developers choose between **OpenHands** (Docker-sandboxed autonomous refactors) and **Aider** (rapid terminal-based pair programming).
-- **Local / Shared Compute**: Uses **Ollama** for embeddings and code intelligence over LAN/Tailscale.
+The repository does not contain these. Install them on the laptop before cloning.
 
----
+1. [Git for Windows](https://git-scm.com/download/win). Aider uses Git to edit a project. Check with `git --version`.
+2. [Python 3.12 for Windows](https://www.python.org/downloads/windows/). Aider does not install on Python 3.13, so this project uses a 3.12 virtual environment. Turn on "Add python.exe to PATH" in the installer, or run `winget install --id Python.Python.3.12 -e`. Open a new PowerShell window and check with `py -3.12 --version`. The reply must start with `Python 3.12`.
+3. [Node.js 20 LTS](https://nodejs.org/) or newer. The phone page is a Next.js app. Or run `winget install --id OpenJS.NodeJS.LTS -e`. Check with `node -v` and `npm -v`.
+4. [Tailscale](https://tailscale.com/download) on the laptop and on the phone, both signed into your Tailscale account. That is the private path from the phone browser to this laptop.
 
-## 👥 Roles & Governance
-- **Project Manager (You)**: Backlog grooming, architecture guardrails, file lock approvals, and milestone sign-offs.
-- **Teammate Developers (Clients)**: Feature implementers driving Aider or OpenHands in their assigned sub-domains.
-- **LangChain Worker Agents**: Local automated copilots bridging teammate prompts with Central Hub MCP tools.
-- **Central Coordinator**: Maintains state integrity, advisory file locks, and shared vector memory.
+Ollama is optional. Skip it if you will use a Gemini key. For a model that stays on the laptop, install [Ollama](https://ollama.com/download) now. The model download is in step 4.
 
----
-
-## 🏗️ Architecture Blueprint
-For the comprehensive technical specification, visit the project architecture document:
-👉 [Multi-Agent Hackathon Architecture Blueprint](file:///C:/Users/Mr%20Mud/.gemini/antigravity/brain/31a04a41-3d8c-4b51-8315-31042a3ecb56/multi_agent_hackathon_architecture.md)
-
-### Hub-and-Spoke Topology
-```text
-           [ Host Node: Powerhouse Laptop ]
-        ┌────────────────────────────────────┐
-        │  • FastMCP Server (Port 8000)      │
-        │  • SQLite Task DB & Advisory Locks │
-        │  • ChromaDB Unified Vector Memory  │
-        │  • Ollama (Qwen2.5-Coder / Nomic)  │
-        └─────────────────┬──────────────────┘
-                          │ LAN / Tailscale Mesh
-       ┌──────────────────┴──────────────────┐
-       │                                     │
-[ Teammate 1: Frontend ]            [ Teammate 2: Backend ]
- ├── LangChain MCP Client            ├── LangChain MCP Client
- ├── Aider CLI (Local Git)           ├── OpenHands Docker Sandbox
- └── Local Codebase                  └── Local Codebase
-```
-
----
-
-## 📁 Repository Structure
-```text
-ai-hacktoberfest-project/
-├── .env.example                # Template for network IPs, ports, and models
-├── README.md                   # This overview
-├── opencode.json               # OpenCode CLI configuration with MCP integration
-├── central_hub/                # Deployed on the powerhouse laptop
-│   ├── mcp_server/             # FastMCP server & custom tool definitions
-│   ├── llm_router/             # Smart cascading Free-LLM router (free-llm.com)
-│   │   ├── provider_registry.py# Metadata, models & rate-limits for Groq, Gemini, Mistral, etc.
-│   │   └── smart_router.py     # Automated failover & cascading fallback engine
-│   ├── database/               # Relational task store & lock manager
-│   ├── memory/                 # Vector memory for docs & code contracts
-│   └── dashboard/              # Streamlit / Web UI for the Project Manager
-├── teammate_client/            # Cloned onto teammate machines
-│   ├── client_agent.py         # LangChain agent communicating with MCP Hub
-│   ├── opencode_runner.py      # OpenCode CLI runner with MCP & OPENCODE_API_KEY
-│   ├── aider_runner.py         # Zero-cost Aider launcher (Groq/Gemini/Mistral/Ollama)
-│   └── openhands_runner.py     # Dispatches sandboxed tasks to OpenHands Docker
-└── shared_contracts/           # Shared OpenAPI specs and Pydantic/TS schemas
-```
-
----
-
-## ⚡ Zero-Cost LLM Providers (from [free-llm.com](https://free-llm.com))
-
-The system comes pre-configured with a **cascading smart fallback router** that leverages the top permanent free tiers (no credit cards required):
-1. **Groq** (`llama-3.3-70b-versatile` / `qwen-2.5-coder-32b`) - 30 RPM, 14,400 req/day
-2. **Google AI Studio** (`gemini-2.0-flash`) - 1M token context, 1,500 req/day
-3. **Mistral** (`codestral-latest`) - Specialized code generation in 80+ languages
-4. **OpenRouter Free** (`deepseek/deepseek-r1:free`, `meta-llama/llama-3.3-70b:free`)
-5. **NVIDIA NIM** (`meta/llama-3.3-70b-instruct`) - 1,000 free requests
-6. **Local Ollama** (`qwen2.5:7b-instruct`) - 100% offline, tuned for GTX 1660 6GB VRAM (~4.5GB VRAM usage, zero RAM spillover)
-
-> **💡 Host Hardware Tip (GTX 1660 6GB VRAM)**:
-> Pull the model before running offline:
-> ```bash
-> ollama pull qwen2.5:7b-instruct
-> ollama pull nomic-embed-text
-> ```
-
----
-
-## What this app actually runs
-
-The sections below this one describe the original fork: OpenHands, OpenCode, LangChain, LiteLLM, Chroma, and several free API accounts. Those are not required. This console does not start them.
-
-What runs is one worker on the PC, three inboxes (UI, API, Review), SQLite on the PC, and a phone page. One task runs at a time, which matches a 6 GB GPU. The phone reaches the PC through Tailscale on port 3000. The hub stays on `127.0.0.1:8797` and is not opened to the network. Port 8787 is left for other local apps. Do not port-forward either port.
-
-### How to use UI, API, and Review
-
-These are three queues, not three models. They share one editor and one active model (Gemini or local `gemma3:4b`, chosen in Access). The difference is which inbox you hand the task to, and which folder that inbox is bound to.
-
-1. In Access, set a folder for each role. The same project folder can be used for all three.
-2. On the Board, write the task and choose UI, API, or Review before sending it.
-3. The worker takes the next queued task only. A second role waits until the first task is closed.
-4. Put the role in the task text. Example: "UI: change the map caption." The model does not get a separate persona unless the task says so.
-5. Optional standing rules go in `HACKSWARM.md` in that project. The worker reads the first 4000 characters on every task.
-6. If you leave the file list empty, the edit is limited to `.hackswarm/notes.md` in the project. Name a source file in the task when you want the running app to change.
-
-Watch the lamp on that card and the Log. Approve is where a held action waits. With Access on Open, a commit can land without waiting. Routine waits before a commit, a delete, or an install. Push never runs from the phone.
-
-Cursor's Grok subscription is the desk agent. It is not a key for this swarm. LiteLLM is not used.
-
-Usable model paths:
-
-- No key: dry-run. The app is already functional for queue, log, and approval.
-- Gemini, from Google AI Studio: the fast path. Set `GEMINI_API_KEY` and `HACKSWARM_PROVIDER=gemini`. The editor model is `gemini-3.8-flash`. Aider runs from the project's Python 3.12 `.venv`, because Aider does not install on Python 3.13.
-- Ollama on this PC: private and slower. The local model is `gemma3:4b`. Switch to it from Access. `deepseek-r1:8b` stays unused because it is the slow one. Expect tens of seconds per edit, not milliseconds.
-- xAI API key from console.x.ai, only if you want Grok outside Cursor: `XAI_API_KEY` and `HACKSWARM_PROVIDER=grok`.
-
-Skip Mistral, OpenRouter, NVIDIA NIM, OpenCode, Copilot, and Groq.
-
-In Access, set a project folder. Optional: limit folders with `HACKSWARM_REPO_ROOTS=D:\Documents\vscode` in `.env`. Optional standing instructions go in `HACKSWARM.md` inside that project. Each queued task is the instruction for that job.
+## 2. Clone the repository
 
 ```powershell
-pip install -r requirements.txt
-python -m uvicorn central_hub.api.app:app --host 127.0.0.1 --port 8797
-cd apps/console
+git clone https://github.com/AbisoyeOnanuga/agent-team.git
+cd agent-team
+```
+
+## 3. Create your private `.env`
+
+```powershell
+copy .env.example .env
+```
+
+Open `.env` in an editor and set your own values:
+
+- `CONSOLE_PIN` is the password you will type on the phone. Replace `change-me`.
+- For Gemini, create a key in [Google AI Studio](https://aistudio.google.com/app/apikey), put it in `GEMINI_API_KEY`, and leave `HACKSWARM_PROVIDER=gemini`.
+- For a local model, set `HACKSWARM_PROVIDER=ollama` and leave the Gemini key unused.
+- `HACKSWARM_REPO_ROOTS` is a folder on your disk that the worker may edit, for example `C:\Users\YourName\Projects`. `D:\Documents\vscode` in the example is only one machine's path.
+
+Leave `HACKSWARM_WORKER=1`. The hub starts the worker when that is set. `.env` is listed in `.gitignore`. Do not force-add it.
+
+## 4. Create the virtual environment
+
+This step is required. The author uses a `.venv` on their laptop, and you need your own. Git does not include it. `pip` downloads the packages from PyPI onto your machine. The first run can take several minutes and creates a folder of about 600 MB.
+
+```powershell
+py -3.12 -m venv .venv
+.venv\Scripts\python -m pip install -r requirements.txt
+```
+
+`requirements.txt` includes `aider-chat==0.86.2` and the hub packages. If `py -3.12` is not recognized, go back to step 1 and open a new PowerShell window after Python 3.12 is installed. Do not copy a `.venv` folder from another computer.
+
+On macOS or Linux, use `python3.12 -m venv .venv` and `.venv/bin/python -m pip install -r requirements.txt`.
+
+If you chose Ollama in step 3, pull the model now, from [Ollama's library](https://ollama.com/library/gemma3):
+
+```powershell
+ollama pull gemma3:4b
+```
+
+## 5. Install the phone page
+
+`npm install` downloads Next.js into `apps/console/node_modules`. That folder is gitignored too.
+
+```powershell
+cd apps\console
 npm install
+cd ..\..
+```
+
+## 6. Start the hub
+
+Leave this window open. The worker starts inside this process.
+
+```powershell
+.venv\Scripts\python -m uvicorn central_hub.api.app:app --host 127.0.0.1 --port 8797
+```
+
+The hub listens only on the laptop, at `http://127.0.0.1:8797`. Do not port-forward this port.
+
+## 7. Start the phone page
+
+Open a second PowerShell window in the same `agent-team` folder. Leave it open.
+
+```powershell
+cd apps\console
 npm run dev
 ```
 
-Sign in with `CONSOLE_PIN`. Eight wrong attempts lock the console for 15 minutes. Routine edits locked files on its own and waits before a commit, a delete, or an install. Push and secret files never run from the phone.
+This listens on port 3000. Do not port-forward that port on your router. Tailscale is how the phone reaches it.
 
-The diagram in `central_hub/dashboard/visualizer.html` is a desk simulation.
+## 8. Open it on the laptop
 
-## Phone dispatch
+In a browser on the laptop, open [http://127.0.0.1:3000](http://127.0.0.1:3000). Sign in with the `CONSOLE_PIN` from your `.env`. Eight wrong attempts lock the console for 15 minutes.
 
-The live console is a mobile browser. The bottom bar is Board, Log, Approve, Notes, and Access.
+## 9. Open it on your phone
 
-## 🚀 Quickstart Guide
+Tailscale must be connected on the phone and on the laptop, on your account. On the laptop:
 
-### 1. Launch Aider with Any Free Provider
-```bash
-# Using Groq (Ultra fast)
-python -m teammate_client.aider_runner --provider groq api/auth.py
-
-# Using Google Gemini 2.0 Flash (Huge context)
-python -m teammate_client.aider_runner --provider gemini
-
-# Using Mistral Codestral (Targeted code generation)
-python -m teammate_client.aider_runner --provider mistral
-
-# Using Central Powerhouse Ollama (Offline)
-python -m teammate_client.aider_runner --provider ollama
+```powershell
+tailscale ip -4
 ```
 
-### 2. Launch OpenCode CLI (with MCP & OPENCODE_API_KEY)
-```bash
-# 1. Install OpenCode CLI globally (Windows / Mac / Linux)
-npm install -g opencode-ai
+On the phone's browser, open `http://<that-address>:3000`. If the command prints `100.64.12.34`, the phone opens `http://100.64.12.34:3000`. That address is your laptop. Sign in with the same PIN.
 
-# 2. Run OpenCode with HackSwarm MCP integration
-python -m teammate_client.opencode_runner api/auth.py
+## 10. Point each role at a project
 
-# 3. Or launch directly using the native CLI (reads opencode.json automatically)
-opencode api/auth.py
-```
+The bottom bar is Board, Log, Approve, Notes, and Access.
 
-### 3. Launch OpenHands Docker Sandbox with Free LLM
-```bash
-python -m teammate_client.openhands_runner --provider gemini --task "Build user authentication API"
-```
+1. Open Access.
+2. Choose Gemini or the local Ollama model. Gemini needs the key from step 3. Ollama needs `gemma3:4b` from step 4.
+3. Set a project folder for each role. The same folder can be used for all three. Save folders.
+4. Routine mode waits before a commit, a delete, or an install. Open mode lets a commit land without waiting. Push never runs from the phone.
 
-### 4. Run the Smart Router with Automatic Fallback
-```bash
-python central_hub/llm_router/smart_router.py
-```
+## 11. Send a task
 
+1. Open Board.
+2. Fill in Title and What should change.
+3. Choose the agent (UI, API, or Review). These are three queues, not three models. They share the model you picked in Access.
+4. Press Queue it.
+5. One task runs at a time. The next role waits until the current task is closed.
+6. The card lamp shows Idle, Editing, Waiting, or Dry-run. Dry-run means no model is configured. Add the Gemini key or switch to Ollama.
+7. Open Log to watch the work. Open Approve when a lamp says Waiting.
+
+A task sent from the phone writes `.hackswarm/notes.md` in the project folder you saved. Put the change you want in What should change. Optional standing rules go in `HACKSWARM.md` in that project. The worker reads the first 4000 characters of that file on every task.
+
+## What the clone does not include
+
+| On the author's machine only | What you do |
+| --- | --- |
+| `.venv/` | Step 4 |
+| `apps/console/node_modules/` | Step 5 |
+| `.env` | Step 3 |
+| `*.db` task queue | Created the first time the hub starts |
+| `.aider*` chat log and repo-map cache | Aider creates these locally when it edits |
+| Ollama models | Step 4, only if you chose Ollama |
+
+`git pull` updates the source on your laptop. Restart the two windows from steps 6 and 7 to see it on the desktop and the phone. A pull does not replace your `.env` or your `.venv`.
+
+The picture in `central_hub/dashboard/visualizer.html` is a desk simulation. It is not the live console.
+
+## Models you can switch on
+
+- No key: the queues, the log, and approval still work. Edits stay a dry-run.
+- Gemini: `HACKSWARM_PROVIDER=gemini` and your `GEMINI_API_KEY`. The editor model is `gemini-3.8-flash`.
+- Ollama on this laptop: `HACKSWARM_PROVIDER=ollama` and `gemma3:4b`. Slower than Gemini. Expect tens of seconds for an edit.
+- xAI, only if you want Grok outside Cursor: a key from [console.x.ai](https://console.x.ai/), `XAI_API_KEY`, and `HACKSWARM_PROVIDER=grok`. Cursor's Grok subscription is not a key for this app.
+
+Mistral, OpenRouter, NVIDIA NIM, OpenCode, Copilot, and Groq are not part of this phone console.
+
+OpenHands, OpenCode, and the extra free-API accounts from the original fork are not started by this console. Steps 1 through 11 are the whole path.
