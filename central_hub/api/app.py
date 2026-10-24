@@ -158,8 +158,10 @@ async def events(request: Request, after: int = 0) -> StreamingResponse:
 
 
 @app.get("/api/events/recent")
-def recent_events(request: Request, after: int = 0) -> dict[str, Any]:
+def recent_events(request: Request, after: int = 0, tail: int = 0) -> dict[str, Any]:
     _require(request)
+    if tail > 0 and after <= 0:
+        return {"events": store.list_events_tail(tail)}
     return {"events": store.list_events(after=after, limit=100)}
 
 

@@ -315,6 +315,24 @@ def list_events(after: int = 0, limit: int = 200) -> list[dict[str, Any]]:
     return rows
 
 
+def list_events_tail(limit: int = 40) -> list[dict[str, Any]]:
+    """Newest events, oldest of that window first, so the phone can tail the log."""
+    limit = max(1, min(int(limit), 80))
+    conn = connect()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT id, created_at, agent_id, task_id, kind, message, payload
+        FROM events ORDER BY id DESC LIMIT ?
+        """,
+        (limit,),
+    )
+    rows = [_event_dict(row) for row in cursor.fetchall()]
+    conn.close()
+    rows.reverse()
+    return rows
+
+
 def _event_dict(row: sqlite3.Row) -> dict[str, Any]:
     payload = json.loads(row["payload"]) if row["payload"] else None
     return {

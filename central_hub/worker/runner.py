@@ -105,9 +105,8 @@ def _run_steps(task: dict, repo: Path, files: list[str], agent_id: str) -> None:
         "The task waits until you allow the read.",
     ) == "stop":
         return
-    names = _list_repo(repo)
     store.record_event(
-        f"Read {len(names)} paths in {repo.name}",
+        f"Working in {repo.name}. The model only receives the locked files.",
         kind="log",
         agent_id=agent_id,
         task_id=task_id,
@@ -342,18 +341,6 @@ def _dry_edit(repo: Path, files: list[str], message: str) -> None:
     stamp = store.now()
     block = f"\n\n# HackSwarm dry-run {stamp}\n{message.strip()}\n"
     target.write_text(existing + block, encoding="utf-8")
-
-
-def _list_repo(repo: Path) -> list[str]:
-    names: list[str] = []
-    for path in repo.rglob("*"):
-        if ".git" in path.parts or path.name == "__pycache__":
-            continue
-        if path.is_file():
-            names.append(str(path.relative_to(repo)))
-        if len(names) >= 40:
-            break
-    return names
 
 
 def _wants_install(prompt: str) -> bool:

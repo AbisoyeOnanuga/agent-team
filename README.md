@@ -56,7 +56,7 @@ If you chose Ollama in step 3, pull the model now, from [Ollama's library](https
 ollama pull gemma3:4b
 ```
 
-## 5. Install the phone page
+## 5. Install the mobile app page
 
 `npm install` downloads Next.js into `apps/console/node_modules`. That folder is gitignored too.
 
@@ -70,7 +70,10 @@ cd ..\..
 
 Leave this window open. The worker starts inside this process.
 
+The `.venv` folder is Python 3.12 and is where Aider runs. The hub uses that same interpreter only after `requirements.txt` is installed into it. The module name is `central_hub`, with an A.
+
 ```powershell
+.venv\Scripts\python -m pip install -r requirements.txt
 .venv\Scripts\python -m uvicorn central_hub.api.app:app --host 127.0.0.1 --port 8797
 ```
 
@@ -107,7 +110,7 @@ The bottom bar is Board, Log, Approve, Notes, and Access.
 
 1. Open Access.
 2. Choose Gemini or the local Ollama model. Gemini needs the key from step 3. Ollama needs `gemma3:4b` from step 4.
-3. Set a project folder for each role. The same folder can be used for all three. Save folders.
+3. Set a folder for each role, then save. For Trail Sketch, UI is `D:\Documents\vscode\trail-sketch\src`, API is `D:\Documents\vscode\trail-sketch\server`, and Review is whichever of those two was just edited. The project root makes every role look through the whole tree. The model only receives the locked files inside the folder you saved.
 4. Routine mode waits before a commit, a delete, or an install. Open mode lets a commit land without waiting. Push never runs from the phone.
 
 ## 11. Send a task

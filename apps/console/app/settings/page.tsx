@@ -5,6 +5,30 @@ import { useRouter } from "next/navigation";
 import { hub } from "../../hub/client";
 import type { Board } from "../../hub/types";
 
+const FOLDERS: Record<string, { job: string; example: string }> = {
+  "agent-ui": {
+    job: "Interface only. Screens, styles, and components.",
+    example: "D:\\Documents\\vscode\\trail-sketch\\src",
+  },
+  "agent-api": {
+    job: "Server only. Routes and handlers the page calls.",
+    example: "D:\\Documents\\vscode\\trail-sketch\\server",
+  },
+  "agent-review": {
+    job: "The folder just changed. src after a UI task, server after an API task.",
+    example: "D:\\Documents\\vscode\\trail-sketch\\src",
+  },
+};
+
+function folderWarning(path: string): string {
+  const trimmed = path.trim().replace(/[\\/]+$/, "");
+  const lower = trimmed.toLowerCase();
+  if (lower.endsWith("\\trail-sketch") || lower.endsWith("/trail-sketch")) {
+    return "This is the project root. Choose src or server.";
+  }
+  return "";
+}
+
 const TOGGLES = [
   ["git_commit", "Commit"],
   ["delete_files", "Delete locked files"],
@@ -142,7 +166,7 @@ export default function SettingsPage() {
                 <strong style={{ fontSize: 18 }}>{label}</strong>
                 <div className="quiet">{auto ? "Runs, and you are told" : "Waits for Proceed"}</div>
               </div>
-              <button type="button" onClick={() => void toggle(action, mode)}>
+              <button className="permit" type="button" onClick={() => void toggle(action, mode)}>
                 {auto ? "On" : "Ask"}
               </button>
             </article>
@@ -151,18 +175,27 @@ export default function SettingsPage() {
       </section>
       <form className="card stack" onSubmit={savePaths}>
         <h2>Projects</h2>
-        {(board?.agents ?? []).map((agent) => (
-          <label className="field" key={agent.agent_id}>
-            {agent.name}
-            <input
-              value={paths[agent.agent_id] || ""}
-              onChange={(event) =>
-                setPaths((current) => ({ ...current, [agent.agent_id]: event.target.value }))
-              }
-              placeholder="D:\Documents\vscode\project"
-            />
-          </label>
-        ))}
+        <p className="quiet">
+          Each role should get its own folder inside the project. The model only receives the locked files in that folder.
+        </p>
+        {(board?.agents ?? []).map((agent) => {
+          const hint = FOLDERS[agent.agent_id];
+          const warning = folderWarning(paths[agent.agent_id] || "");
+          return (
+            <label className="field" key={agent.agent_id}>
+              {agent.name}
+              <span className="quiet">{hint?.job}</span>
+              <input
+                value={paths[agent.agent_id] || ""}
+                onChange={(event) =>
+                  setPaths((current) => ({ ...current, [agent.agent_id]: event.target.value }))
+                }
+                placeholder={hint?.example || "D:\\Documents\\vscode\\project\\src"}
+              />
+              {warning ? <span className="error">{warning}</span> : null}
+            </label>
+          );
+        })}
         <button className="wide" type="submit">Save folders</button>
       </form>
       {message ? <p className="quiet">{message}</p> : null}

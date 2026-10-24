@@ -193,6 +193,18 @@ textarea { min-height: 96px; resize: vertical; }
 
 .wide { width: 100%; }
 
+@media (hover: hover) {
+  .actions button:hover,
+  button.wide:hover,
+  button.permit:hover,
+  .nav a:hover,
+  button.ghost:hover {
+    background: var(--amber);
+    color: var(--ink);
+    border-color: var(--amber);
+  }
+}
+
 .actions .ghost, .nav a {
   background: transparent;
   color: var(--paper);
@@ -228,11 +240,23 @@ textarea { min-height: 96px; resize: vertical; }
   border-color: var(--amber);
 }
 
-.tape { display: grid; gap: 8px; }
+.tape {
+  display: grid;
+  gap: 8px;
+  max-height: calc(100dvh - 190px);
+  margin-top: 16px;
+  overflow: auto;
+}
 
 .line {
   padding: 10px 12px;
   animation: tape-in 280ms ease;
+}
+
+.line pre {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  font: inherit;
 }
 
 .line .kind {
@@ -325,6 +349,16 @@ html[data-theme="light"] .error { color: #9d2b18; }
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 8px;
+}
+
+.permit {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--display);
+  font-weight: 700;
 }
 
 .pin-row button {
