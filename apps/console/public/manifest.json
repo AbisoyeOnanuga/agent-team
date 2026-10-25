@@ -1,6 +1,6 @@
 {
-  "name": "HackSwarm Dispatch",
-  "short_name": "Dispatch",
+  "name": "Agent team",
+  "short_name": "Team",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#14160f",

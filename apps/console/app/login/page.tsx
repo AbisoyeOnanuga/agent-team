@@ -28,9 +28,9 @@ export default function LoginPage() {
   return (
     <main className="login">
       <form className="card stack" method="post" onSubmit={onSubmit}>
-        <p className="eyebrow">Field radio</p>
-        <h1>Dispatch</h1>
-        <p className="quiet">The agents keep working on the desk machine. This PIN opens the board.</p>
+        <p className="eyebrow">Sign in</p>
+        <h1>Agent team</h1>
+        <p className="quiet">This PIN opens the team on this computer.</p>
         <label className="field">
           PIN
           <span className="pin-row">

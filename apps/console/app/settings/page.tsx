@@ -157,7 +157,7 @@ export default function SettingsPage() {
 
   return (
     <main className="stack">
-      <p className="eyebrow">Allowance</p>
+      <p className="eyebrow">Models and folders</p>
       <h1>Access</h1>
       <p className="quiet">
         Current level: {board?.policy.preset || "…"}. Push and secret files never run from the phone.

@@ -95,9 +95,9 @@ export default function BoardPage() {
     <main className="stack">
       <header className="mast">
         <div>
-          <p className="eyebrow">Night shift</p>
-          <h1>Board</h1>
-          <p className="quiet">Who is working, and what you can hand them next.</p>
+          <p className="eyebrow">Agent team</p>
+          <h1>Team</h1>
+          <p className="quiet">The three roles, and the tasks you send them.</p>
         </div>
         <span className={holds ? "pill hold" : "pill"}>{holds} hold</span>
       </header>

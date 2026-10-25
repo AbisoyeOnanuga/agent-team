@@ -51,8 +51,8 @@ export default function SteerPage() {
 
   return (
     <main>
-      <p className="eyebrow">While you walk</p>
-      <h1>Notes</h1>
+      <p className="eyebrow">Each role</p>
+      <h1>Prompts</h1>
       <p className="quiet">
         Add a standing prompt for each role from the phone. It is added after that role&apos;s built-in brief, and it stays until you edit it.
       </p>

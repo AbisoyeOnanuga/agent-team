@@ -39,12 +39,12 @@ export default function GatePage() {
 
   return (
     <main className="stack">
-      <p className="eyebrow">Consequential</p>
+      <p className="eyebrow">Waiting on you</p>
       <h1>Approve</h1>
       <p className="quiet">
         Each finished role waits here on its own. Approving one does not hold the other.
       </p>
-      {gates.length === 0 ? <p className="quiet">Clear board. Routine work is running without you.</p> : null}
+      {gates.length === 0 ? <p className="quiet">Nothing is waiting. Routine work continues on its own.</p> : null}
       {gates.map((gate) => (
         <article className="ticket" key={gate.id}>
           <div className="band">HOLD</div>

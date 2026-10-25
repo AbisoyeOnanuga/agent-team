@@ -6,10 +6,10 @@ import { usePathname } from "next/navigation";
 import { subscribeHub } from "../hub/client";
 
 const LINKS = [
-  ["/", "Board"],
+  ["/", "Team"],
   ["/tape", "Log"],
   ["/gate", "Approve"],
-  ["/steer", "Notes"],
+  ["/steer", "Prompts"],
   ["/settings", "Access"],
 ];
 
@@ -58,7 +58,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </p>
       ) : null}
       {children}
-      <nav className="nav" aria-label="Dispatch">
+      <nav className="nav" aria-label="Pages">
         {LINKS.map(([href, label]) => (
           <Link key={href} href={href} aria-current={path === href ? "page" : undefined}>
             {label}

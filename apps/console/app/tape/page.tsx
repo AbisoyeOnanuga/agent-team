@@ -115,7 +115,7 @@ export default function TapePage() {
 
   return (
     <main>
-      <p className="eyebrow">Live</p>
+      <p className="eyebrow">Activity</p>
       <h1>Log</h1>
       <p className="quiet">Newest lines stay at the bottom. One edit stays in one block.</p>
       <div className="tape" ref={scroller}>

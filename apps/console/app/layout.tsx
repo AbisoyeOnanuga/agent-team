@@ -3,10 +3,10 @@ import "./globals.css";
 import { Shell } from "./shell";
 
 export const metadata: Metadata = {
-  title: "HackSwarm Dispatch",
-  description: "Watch the coding agents and approve the moves that stick.",
+  title: "Agent team",
+  description: "Send work to the three roles and approve the changes that stick.",
   manifest: "/manifest.json",
-  appleWebApp: { capable: true, title: "Dispatch", statusBarStyle: "black" },
+  appleWebApp: { capable: true, title: "Agent team", statusBarStyle: "black" },
 };
 
 export const viewport: Viewport = {
