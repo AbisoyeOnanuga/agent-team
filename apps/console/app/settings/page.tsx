@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { hub } from "../../hub/client";
 import type { Board } from "../../hub/types";
@@ -43,6 +43,7 @@ export default function SettingsPage() {
   const [browseId, setBrowseId] = useState("");
   const [listing, setListing] = useState<{ path: string; parent: string; dirs: string[] } | null>(null);
   const [browseError, setBrowseError] = useState("");
+  const guideRef = useRef<HTMLDivElement>(null);
 
   async function load() {
     const response = await hub("/api/board");
@@ -135,6 +136,9 @@ export default function SettingsPage() {
   async function openBrowse(agentId: string) {
     setBrowseId(agentId);
     await loadDirs(paths[agentId] || "");
+    window.setTimeout(() => {
+      guideRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+    }, 0);
   }
 
   function useFolder() {
@@ -209,50 +213,62 @@ export default function SettingsPage() {
         <p className="quiet">
           Each role should get its own folder inside the project. The model only receives the locked files in that folder.
         </p>
+        {browseId && listing ? (
+          <div className="guide" ref={guideRef}>
+            <p className="eyebrow">
+              Folder for {board?.agents.find((agent) => agent.agent_id === browseId)?.name || "this role"}
+            </p>
+            <p className="guide-path">{listing.path}</p>
+            <div className="guide-actions">
+              {listing.parent ? (
+                <button className="guide-action" type="button" onClick={() => void loadDirs(listing.parent)}>
+                  Go up
+                </button>
+              ) : null}
+              <button className="guide-action use" type="button" onClick={useFolder}>
+                Use this folder
+              </button>
+            </div>
+            <div className="guide-list">
+              {listing.dirs.length === 0 ? <p className="quiet">No folders inside.</p> : null}
+              {listing.dirs.map((name) => (
+                <button
+                  className="guide-folder"
+                  key={name}
+                  type="button"
+                  onClick={() => void loadDirs(`${listing.path}\\${name}`)}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+            {browseError ? <p className="error">{browseError}</p> : null}
+          </div>
+        ) : null}
         {(board?.agents ?? []).map((agent) => {
           const hint = FOLDERS[agent.agent_id];
           const warning = folderWarning(paths[agent.agent_id] || "");
+          const open = browseId === agent.agent_id && listing;
           return (
-            <label className="field" key={agent.agent_id}>
-              {agent.name}
-              <span className="quiet">{hint?.job}</span>
-              <input
-                value={paths[agent.agent_id] || ""}
-                onChange={(event) =>
-                  setPaths((current) => ({ ...current, [agent.agent_id]: event.target.value }))
-                }
-                placeholder={hint?.example || "D:\\Documents\\vscode\\project\\src"}
-              />
-              {warning ? <span className="error">{warning}</span> : null}
-              <button className="ghost" type="button" onClick={() => void openBrowse(agent.agent_id)}>
-                Browse
-              </button>
-            </label>
+            <div className="stack" key={agent.agent_id}>
+              <label className="field">
+                {agent.name}
+                <span className="quiet">{hint?.job}</span>
+                <input
+                  value={paths[agent.agent_id] || ""}
+                  onChange={(event) =>
+                    setPaths((current) => ({ ...current, [agent.agent_id]: event.target.value }))
+                  }
+                  placeholder={hint?.example || "D:\\Documents\\vscode\\project\\src"}
+                />
+                {warning ? <span className="error">{warning}</span> : null}
+                <button className="ghost" type="button" onClick={() => void openBrowse(agent.agent_id)}>
+                  {open ? "Close browser" : "Browse"}
+                </button>
+              </label>
+            </div>
           );
         })}
-        {browseId && listing ? (
-          <div className="card stack">
-            <p className="quiet">{listing.path}</p>
-            {listing.parent ? (
-              <button className="ghost" type="button" onClick={() => void loadDirs(listing.parent)}>
-                Up
-              </button>
-            ) : null}
-            {listing.dirs.length === 0 ? <p className="quiet">No folders inside.</p> : null}
-            {listing.dirs.map((name) => (
-              <button
-                className="ghost"
-                key={name}
-                type="button"
-                onClick={() => void loadDirs(`${listing.path}\\${name}`)}
-              >
-                {name}
-              </button>
-            ))}
-            {browseError ? <p className="error">{browseError}</p> : null}
-            <button type="button" onClick={useFolder}>Use this folder</button>
-          </div>
-        ) : null}
         <button className="wide" type="submit">Save folders</button>
       </form>
       {message ? <p className="quiet">{message}</p> : null}

@@ -57,6 +57,11 @@ class ModelBody(BaseModel):
     provider: str
 
 
+class BriefBody(BaseModel):
+    agent_id: str
+    brief: str = Field(default="", max_length=4000)
+
+
 @asynccontextmanager
 async def _lifespan(_: FastAPI):
     from teammate_client.aider_runner import load_env
@@ -200,6 +205,21 @@ def write_policy(request: Request, body: PolicyBody) -> dict[str, Any]:
             raise HTTPException(status_code=400, detail=result.get("error", "Rejected"))
         return result
     raise HTTPException(status_code=400, detail="Send a preset or an action and mode")
+
+
+@app.get("/api/briefs")
+def read_briefs(request: Request) -> dict[str, Any]:
+    _require(request)
+    return {"briefs": store.agent_briefs()}
+
+
+@app.put("/api/briefs")
+def write_brief(request: Request, body: BriefBody) -> dict[str, Any]:
+    _require(request)
+    result = store.set_agent_brief(body.agent_id, body.brief)
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error", "Rejected"))
+    return result
 
 
 @app.put("/api/model")

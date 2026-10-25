@@ -1243,6 +1243,40 @@ def active_provider() -> str:
     return env if env in ("gemini", "ollama") else "gemini"
 
 
+def agent_briefs() -> dict[str, str]:
+    conn = connect()
+    rows = conn.execute(
+        "SELECT key, value FROM settings WHERE key LIKE 'brief:%'"
+    ).fetchall()
+    conn.close()
+    stored = {row["key"].split(":", 1)[1]: row["value"] for row in rows}
+    return {agent["agent_id"]: stored.get(agent["agent_id"], "") for agent in AGENTS}
+
+
+def agent_brief(agent_id: str) -> str:
+    return agent_briefs().get(agent_id, "").strip()
+
+
+def set_agent_brief(agent_id: str, brief: str) -> dict[str, Any]:
+    known = {agent["agent_id"] for agent in AGENTS}
+    if agent_id not in known:
+        return {"success": False, "error": "Unknown role"}
+    text = brief.strip()
+    if len(text) > 4000:
+        return {"success": False, "error": "Keep the brief under 4000 characters"}
+    conn = connect()
+    conn.execute(
+        """
+        INSERT INTO settings (key, value) VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        """,
+        (f"brief:{agent_id}", text),
+    )
+    conn.commit()
+    conn.close()
+    return {"success": True, "agent_id": agent_id, "brief": text}
+
+
 def set_active_provider(name: str) -> dict[str, Any]:
     if name not in ("gemini", "ollama"):
         return {"success": False, "error": "Choose Gemini or the local Ollama model."}

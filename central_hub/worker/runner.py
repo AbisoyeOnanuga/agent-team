@@ -320,8 +320,10 @@ def _edit(task: dict, repo: Path, files: list[str], agent_id: str) -> None:
     notes = store.consume_steers(agent_id, task["id"])
     message = (task.get("prompt") or "").strip()
     brief = ROLE_BRIEFS.get(agent_id, "")
-    if brief:
-        message = brief + "\n\nTask:\n" + message
+    custom = store.agent_brief(agent_id)
+    if brief or custom:
+        parts = [part for part in (brief, custom) if part]
+        message = "\n\n".join(parts) + "\n\nTask:\n" + message
     standing = _standing_brief(repo)
     if standing:
         message = standing + "\n\n" + message
