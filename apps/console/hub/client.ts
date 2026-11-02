@@ -13,7 +13,9 @@ function setHubDown(down: boolean) {
 export function subscribeHub(listener: (down: boolean) => void) {
   listeners.add(listener);
   listener(hubDown);
-  return () => listeners.delete(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }
 
 export function hubBase(): string {
