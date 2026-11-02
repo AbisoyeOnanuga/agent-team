@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { hub } from "../hub/client";
 import type { AgentCard, Board } from "../hub/types";
+import { FilePicker } from "./file-picker";
 
 type PixelKind = "idle" | "work" | "hold" | "dry";
 
@@ -45,6 +46,8 @@ export default function BoardPage() {
   const [title2, setTitle2] = useState("");
   const [prompt2, setPrompt2] = useState("");
   const [agent2, setAgent2] = useState("agent-api");
+  const [files, setFiles] = useState<string[]>([]);
+  const [files2, setFiles2] = useState<string[]>([]);
 
   async function load() {
     const response = await hub("/api/board");
@@ -62,18 +65,22 @@ export default function BoardPage() {
   async function assign(event: FormEvent) {
     event.preventDefault();
     setError("");
-    const jobs = [{ title, prompt, agent_id: agentId }];
+    if (!files.length || (second && !files2.length)) {
+      setError("Pick at least one file for each task.");
+      return;
+    }
+    const jobs = [{ title, prompt, agent_id: agentId, files }];
     if (second) {
       if (agent2 === agentId) {
         setError("Pick two different roles. A role works one folder at a time.");
         return;
       }
-      jobs.push({ title: title2, prompt: prompt2, agent_id: agent2 });
+      jobs.push({ title: title2, prompt: prompt2, agent_id: agent2, files: files2 });
     }
     for (const job of jobs) {
       const response = await hub("/api/tasks", {
         method: "POST",
-        body: JSON.stringify({ ...job, files: [] }),
+        body: JSON.stringify(job),
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
@@ -85,6 +92,8 @@ export default function BoardPage() {
     setPrompt("");
     setTitle2("");
     setPrompt2("");
+    setFiles([]);
+    setFiles2([]);
     setSecond(false);
     await load();
   }
@@ -141,9 +150,11 @@ export default function BoardPage() {
             onChange={(event) => {
               const next = event.target.value;
               setAgentId(next);
+              setFiles([]);
               if (next === agent2) {
                 const other = (board?.agents ?? []).find((agent) => agent.agent_id !== next);
                 if (other) setAgent2(other.agent_id);
+                setFiles2([]);
               }
             }}
           >
@@ -154,6 +165,7 @@ export default function BoardPage() {
             ))}
           </select>
         </label>
+        <FilePicker key={agentId} agentId={agentId} value={files} onChange={setFiles} />
         <button className="ghost" type="button" onClick={() => setSecond((open) => !open)}>
           {second ? "One role only" : "Add a second role"}
         </button>
@@ -169,7 +181,13 @@ export default function BoardPage() {
             </label>
             <label className="field">
               Second agent
-              <select value={agent2} onChange={(event) => setAgent2(event.target.value)}>
+              <select
+                value={agent2}
+                onChange={(event) => {
+                  setAgent2(event.target.value);
+                  setFiles2([]);
+                }}
+              >
                 {(board?.agents ?? [])
                   .filter((agent) => agent.agent_id !== agentId)
                   .map((agent) => (
@@ -179,6 +197,7 @@ export default function BoardPage() {
                   ))}
               </select>
             </label>
+            <FilePicker key={agent2} agentId={agent2} value={files2} onChange={setFiles2} />
           </>
         ) : null}
         {error ? <p className="error">{error}</p> : null}

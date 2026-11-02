@@ -16,6 +16,8 @@ import json
 import os
 import secrets
 import sqlite3
+import time
+import urllib.request
 import uuid
 
 from central_hub.api.policy import ACTION_CLASSES, PRESETS, preset_rows
@@ -357,7 +359,10 @@ def create_task(
     known = {agent["agent_id"] for agent in AGENTS}
     if agent_id not in known:
         return {"success": False, "error": "Unknown agent"}
-    clean_files = files or [_role_note(agent_id)]
+    picked = [rel.strip().replace("\\", "/").strip("/") for rel in (files or []) if rel.strip()]
+    clean_files = list(dict.fromkeys(picked)) or [_role_note(agent_id)]
+    if len(clean_files) > 12:
+        return {"success": False, "error": "Pick 12 files or fewer for one task"}
     for rel in clean_files:
         if is_secret_path(rel):
             return {"success": False, "error": "Secret files stay at the desk"}
@@ -408,9 +413,30 @@ def _role_note(agent_id: str) -> str:
     }.get(agent_id, ".hackswarm/notes.md")
 
 
+_OLLAMA_CHECK: dict[str, Any] = {"at": 0.0, "ok": False}
+
+
+def _ollama_ready() -> bool:
+    stamp = time.monotonic()
+    if stamp - _OLLAMA_CHECK["at"] < 15:
+        return bool(_OLLAMA_CHECK["ok"])
+    base = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").strip().rstrip("/")
+    wanted = ollama_model_name()
+    ok = False
+    try:
+        with urllib.request.urlopen(f"{base}/api/tags", timeout=1.5) as response:
+            body = json.loads(response.read().decode("utf-8"))
+        names = {model.get("name", "") for model in body.get("models", [])}
+        ok = wanted in names or f"{wanted}:latest" in names
+    except (OSError, ValueError):
+        ok = False
+    _OLLAMA_CHECK.update(at=stamp, ok=ok)
+    return ok
+
+
 def lane_ready(name: str) -> bool:
     if name == "ollama":
-        return True
+        return _ollama_ready()
     if name != "gemini":
         return False
     value = os.getenv("GEMINI_API_KEY", "").strip()
@@ -431,10 +457,18 @@ def _free_provider(cursor: sqlite3.Cursor) -> Optional[str]:
     if first not in ("gemini", "ollama"):
         first = "gemini"
     second = "ollama" if first == "gemini" else "gemini"
-    for lane in (first, second):
-        if lane not in busy and lane_ready(lane):
+    lanes = [lane for lane in (first, second) if lane_ready(lane)]
+    if not lanes:
+        lanes = [first]
+    for lane in lanes:
+        if lane not in busy:
             return lane
     return None
+
+
+def _lock_keys(repo_path: Optional[str], files: list[str]) -> set[str]:
+    base = Path(repo_path) if repo_path else Path(".")
+    return {os.path.normcase(str((base / rel).resolve())) for rel in files}
 
 
 def peek_free_provider() -> Optional[str]:
@@ -452,16 +486,17 @@ def claim_task(
 ) -> dict[str, Any]:
     conn = connect()
     cursor = conn.cursor()
+    own = cursor.execute("SELECT repo_path FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    mine = _lock_keys(own["repo_path"] if own else None, files_to_lock)
     cursor.execute(
-        "SELECT id, locked_files FROM tasks WHERE status = 'IN_PROGRESS' AND id != ?",
+        "SELECT id, repo_path, locked_files FROM tasks WHERE status = 'IN_PROGRESS' AND id != ?",
         (task_id,),
     )
     conflict_files: list[tuple[str, str]] = []
     for other in cursor.fetchall():
-        other_locked = json.loads(other["locked_files"] or "[]")
-        for rel in files_to_lock:
-            if rel in other_locked:
-                conflict_files.append((rel, other["id"]))
+        theirs = _lock_keys(other["repo_path"], json.loads(other["locked_files"] or "[]"))
+        for key in sorted(mine & theirs):
+            conflict_files.append((key, other["id"]))
     if conflict_files:
         conn.close()
         return {
@@ -1078,6 +1113,41 @@ def clear_pin_attempts() -> None:
 def workspace_root() -> Path:
     raw = os.getenv("HACKSWARM_WORKSPACE", r"D:\Documents\vscode").strip()
     return Path(raw).expanduser().resolve()
+
+
+_SKIP_DIRS = {".git", "node_modules", ".venv", ".next", "__pycache__", "dist", "build"}
+
+
+def list_role_entries(agent_id: str, folder: str) -> dict[str, Any]:
+    project = get_project(agent_id)
+    raw = (project or {}).get("repo_path")
+    if not raw or not Path(raw).is_dir():
+        return {"ok": False, "error": "Choose this role's folder in Access first"}
+    root = Path(raw).resolve()
+    rel = folder.strip().replace("\\", "/").strip("/")
+    target = resolve_inside(root, rel) if rel else root
+    if target is None or not target.is_dir():
+        return {"ok": False, "error": "Stay inside this role's folder"}
+    dirs: list[str] = []
+    files: list[str] = []
+    try:
+        children = sorted(target.iterdir(), key=lambda item: item.name.lower())
+    except OSError:
+        return {"ok": False, "error": "That folder cannot be listed"}
+    for child in children:
+        if child.name.startswith(".") or is_secret_path(child.name):
+            continue
+        if child.is_dir():
+            if child.name not in _SKIP_DIRS:
+                dirs.append(child.name)
+        elif child.is_file():
+            files.append(child.name)
+        if len(dirs) + len(files) >= 400:
+            break
+    here = target.relative_to(root).as_posix()
+    here = "" if here == "." else here
+    parent = None if not here else ("/".join(here.split("/")[:-1]))
+    return {"ok": True, "root": str(root), "path": here, "parent": parent, "dirs": dirs, "files": files}
 
 
 def list_workspace_dirs(folder: str) -> dict[str, Any]:

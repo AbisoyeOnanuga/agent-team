@@ -240,6 +240,15 @@ def folders(request: Request, path: str = "") -> dict[str, Any]:
     return listing
 
 
+@app.get("/api/files")
+def role_files(request: Request, agent_id: str, path: str = "") -> dict[str, Any]:
+    _require(request)
+    listing = store.list_role_entries(agent_id, path)
+    if not listing.get("ok"):
+        raise HTTPException(status_code=400, detail=listing.get("error", "Rejected"))
+    return listing
+
+
 @app.post("/api/tasks")
 def create_task(request: Request, body: TaskBody) -> dict[str, Any]:
     _require(request)

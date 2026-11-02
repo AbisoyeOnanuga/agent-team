@@ -347,21 +347,16 @@ def _edit(task: dict, repo: Path, files: list[str], agent_id: str) -> None:
         if code == 0:
             _write_shared(repo, task, agent_id, files)
             return
-        store.record_event(
-            "Aider did not finish. A dry-run note was written inside the lock instead.",
-            kind="notify",
-            agent_id=agent_id,
-            task_id=task["id"],
+        raise RuntimeError(
+            f"Aider stopped with exit code {code} on {provider}. The locked files were left as they were."
         )
-    else:
-        store.record_event(
-            "Model offline. Wrote a local dry-run note inside the lock.",
-            kind="notify",
-            agent_id=agent_id,
-            task_id=task["id"],
-        )
+    store.record_event(
+        "Model offline. Wrote a dry-run note. Code files were not touched.",
+        kind="notify",
+        agent_id=agent_id,
+        task_id=task["id"],
+    )
     _dry_edit(repo, files, message)
-    _write_shared(repo, task, agent_id, files)
 
 
 def _standing_brief(repo: Path) -> str:
@@ -373,8 +368,9 @@ def _standing_brief(repo: Path) -> str:
 
 
 def _dry_edit(repo: Path, files: list[str], message: str) -> None:
-    target = store.resolve_inside(repo, files[0])
-    if target is None or store.is_secret_path(files[0]):
+    rel = files[0] if files[0].startswith(".hackswarm/") else ".hackswarm/dry-run.md"
+    target = store.resolve_inside(repo, rel)
+    if target is None or store.is_secret_path(rel):
         raise RuntimeError("Locked file is outside the project")
     target.parent.mkdir(parents=True, exist_ok=True)
     existing = target.read_text(encoding="utf-8") if target.exists() else ""
@@ -517,15 +513,38 @@ def _diff_stat(repo: Path, files: list[str]) -> str:
     root = _git_root(repo)
     if root is None:
         return "This folder is not a git repo. Proceed writes a commit note. Nothing is pushed."
+    paths = _paths_from_root(root, repo, files)
     shown = subprocess.run(
-        ["git", "status", "--short", "--", *_paths_from_root(root, repo, files)],
+        ["git", "status", "--short", "--", *paths],
         cwd=root,
         capture_output=True,
         text=True,
         timeout=20,
     )
     stat = (shown.stdout or shown.stderr or "").strip()
-    return stat or "No diff on the locked files."
+    if not stat:
+        return "No diff on the locked files."
+    body = subprocess.run(
+        ["git", "diff", "--no-color", "--", *paths],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=20,
+    ).stdout or ""
+    for line in stat.splitlines():
+        if not line.startswith("??"):
+            continue
+        rel = line[3:].strip()
+        full = store.resolve_inside(root, rel)
+        if full is None or not full.is_file() or store.is_secret_path(rel):
+            continue
+        head = full.read_text(encoding="utf-8", errors="replace").splitlines()[:40]
+        body += f"\nnew file {rel}\n" + "\n".join("+" + text for text in head) + "\n"
+    if len(body) > 6000:
+        body = body[:6000] + "\n... diff cut at 6000 characters. Read the rest at the desk."
+    return (stat + "\n\n" + body.strip()).strip()
 
 
 def _commit(repo: Path, files: list[str], title: str, agent_id: str, task_id: str) -> None:
@@ -563,8 +582,24 @@ def _commit_locked(
         env["GIT_AUTHOR_EMAIL"] = "hackswarm@localhost"
         env["GIT_COMMITTER_NAME"] = "HackSwarm"
         env["GIT_COMMITTER_EMAIL"] = "hackswarm@localhost"
+    tracked = subprocess.run(
+        ["git", "ls-files", "--", *files],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        timeout=20,
+    ).stdout.split()
+    files = [rel for rel in files if (repo / rel).exists() or rel in tracked]
+    if not files:
+        store.record_event(
+            "Nothing to commit. The locked files do not exist yet.",
+            kind="notify",
+            agent_id=agent_id,
+            task_id=task_id,
+        )
+        return
     add = subprocess.run(
-        ["git", "add", "--", *files],
+        ["git", "add", "-A", "--", *files],
         cwd=repo,
         capture_output=True,
         text=True,
@@ -573,8 +608,21 @@ def _commit_locked(
     )
     if add.returncode != 0:
         raise RuntimeError(add.stderr.strip() or "git add failed")
+    staged = subprocess.run(
+        ["git", "diff", "--cached", "--quiet", "--", *files],
+        cwd=repo,
+        timeout=20,
+    )
+    if staged.returncode == 0:
+        store.record_event(
+            "Nothing to commit. The locked files did not change.",
+            kind="notify",
+            agent_id=agent_id,
+            task_id=task_id,
+        )
+        return
     commit = subprocess.run(
-        ["git", "-c", "commit.gpgsign=false", "commit", "-m", title],
+        ["git", "-c", "commit.gpgsign=false", "commit", "-m", title, "--", *files],
         cwd=repo,
         capture_output=True,
         text=True,
