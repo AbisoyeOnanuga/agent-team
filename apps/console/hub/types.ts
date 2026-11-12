@@ -66,6 +66,7 @@ export type CollabLink = {
   to: string;
   kind: string;
   privacy: string;
+  live?: boolean;
 };
 
 export type Board = {

@@ -48,10 +48,44 @@ function statusLine(board: Board | null): string {
   return `Free · ${team} teammates · ${jobs}/2 jobs · ${first}`;
 }
 
-function nodePoint(index: number, total: number, size: number) {
-  const angle = (Math.PI * 2 * index) / Math.max(total, 1) - Math.PI / 2;
-  const radius = size * 0.34;
-  return { x: size / 2 + Math.cos(angle) * radius, y: size / 2 + Math.sin(angle) * radius };
+type Point = { x: number; y: number };
+
+function layoutAgents(agents: AgentCard[], width: number, height: number) {
+  const core = agents.filter((agent) => !agent.agent_id.startsWith("agent-swarm-"));
+  const swarm = agents.filter((agent) => agent.agent_id.startsWith("agent-swarm-"));
+  const points: Record<string, Point> = {};
+  const pad = 36;
+  const coreY = swarm.length ? height * 0.28 : height * 0.5;
+  const swarmY = height * 0.78;
+
+  core.forEach((agent, index) => {
+    const span = Math.max(core.length - 1, 1);
+    const x = pad + ((width - pad * 2) * index) / span;
+    points[agent.agent_id] = { x: core.length === 1 ? width / 2 : x, y: coreY };
+  });
+
+  swarm.forEach((agent, index) => {
+    const span = Math.max(swarm.length - 1, 1);
+    const x = pad + ((width - pad * 2) * index) / span;
+    points[agent.agent_id] = { x: swarm.length === 1 ? width / 2 : x, y: swarmY };
+  });
+
+  return {
+    points,
+    share: { x: width / 2, y: swarm.length ? height * 0.52 : height * 0.78 },
+    hasSwarm: swarm.length > 0,
+  };
+}
+
+function wirePath(a: Point, b: Point, bend: number) {
+  const mx = (a.x + b.x) / 2;
+  const my = (a.y + b.y) / 2;
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = (-dy / len) * bend;
+  const ny = (dx / len) * bend;
+  return `M ${a.x} ${a.y} Q ${mx + nx} ${my + ny} ${b.x} ${b.y}`;
 }
 
 function SwarmMap({
@@ -63,10 +97,11 @@ function SwarmMap({
   links: CollabLink[];
   board: Board | null;
 }) {
-  const size = 300;
-  const points = agents.map((_, index) => nodePoint(index, agents.length, size));
-  const byId = Object.fromEntries(agents.map((agent, index) => [agent.agent_id, points[index]]));
+  const width = 340;
+  const height = 300;
+  const { points, share, hasSwarm } = layoutAgents(agents, width, height);
   const working = agents.filter((agent) => agentState(agent, board) === "work").length;
+  const liveCount = links.filter((link) => link.live).length;
 
   return (
     <section className="compute-unit swarm-map" aria-label="Team compute unit">
@@ -75,49 +110,77 @@ function SwarmMap({
         <span className="unit-readout">
           <i className={working ? "led on" : "led"} />
           {agents.length} cores · {working} lit
+          {liveCount ? ` · ${liveCount} live` : ""}
         </span>
       </div>
-      <svg viewBox={`0 0 ${size} ${size}`} className="swarm-svg" role="img">
-        <title>Teammate compute mesh</title>
-        <circle className="unit-core" cx={size / 2} cy={size / 2} r="28" />
-        <circle className="unit-core-ring" cx={size / 2} cy={size / 2} r="36" />
-        <text className="unit-core-label" x={size / 2} y={size / 2 + 4} textAnchor="middle">
-          BUS
+      <p className="quiet map-blurb">
+        Main team is UI ↔ API ↔ Review. Extra swarm cores assist one of those roles.
+        SHARE is the shared note file (`.hackswarm/shared.md`), not a model. Dots move only when a job is running.
+      </p>
+      <svg viewBox={`0 0 ${width} ${height}`} className="swarm-svg" role="img">
+        <title>Teammate communication map</title>
+        <circle className="unit-core" cx={share.x} cy={share.y} r="22" />
+        <circle className={`unit-core-ring${liveCount ? " live" : ""}`} cx={share.x} cy={share.y} r="30" />
+        <text className="unit-core-label" x={share.x} y={share.y + 4} textAnchor="middle">
+          SHARE
         </text>
         {links.map((link, linkIndex) => {
-          const a = byId[link.from];
-          const b = byId[link.to];
+          const a = points[link.from];
+          const b = points[link.to];
           if (!a || !b) return null;
-          const pathId = `wire-${link.from}-${link.to}`;
-          const d = `M ${a.x} ${a.y} Q ${size / 2} ${size / 2} ${b.x} ${b.y}`;
+          const bend =
+            link.kind === "team" ? -28 - linkIndex * 4
+            : link.kind === "handoff" ? 26 + linkIndex * 3
+            : link.kind === "assist" ? (linkIndex % 2 === 0 ? 18 : -18)
+            : 12;
+          const d = wirePath(a, b, bend);
           return (
-            <g key={pathId}>
-              <path id={pathId} className={`swarm-link ${link.kind} ${link.privacy}`} d={d} />
-              <circle className={`electron ${link.kind}`} r="2.4">
-                <animateMotion dur={`${1.6 + (linkIndex % 3) * 0.35}s`} repeatCount="indefinite" path={d} />
-              </circle>
+            <g key={`${link.from}-${link.to}-${link.kind}`}>
+              <path className={`swarm-link ${link.kind} ${link.privacy}${link.live ? " live" : ""}`} d={d} />
+              {link.live ? (
+                <circle className={`electron ${link.kind}`} r="2.6">
+                  <animateMotion dur={`${1.4 + (linkIndex % 3) * 0.25}s`} repeatCount="indefinite" path={d} />
+                </circle>
+              ) : null}
             </g>
           );
         })}
-        {agents.map((agent, index) => {
-          const point = points[index];
+        {agents.map((agent) => {
+          const point = points[agent.agent_id];
+          if (!point) return null;
           const state = agentState(agent, board);
+          const swarm = agent.agent_id.startsWith("agent-swarm-");
           return (
-            <g key={agent.agent_id} className={`swarm-node ${state}`} transform={`translate(${point.x} ${point.y})`}>
+            <g
+              key={agent.agent_id}
+              className={`swarm-node ${state}${swarm ? " swarm" : " core"}`}
+              transform={`translate(${point.x} ${point.y})`}
+            >
               <circle className="node-glow" r="22" />
-              <circle className="node-body" r="16" />
+              <circle className="node-body" r={swarm ? 14 : 17} />
               <circle className="node-led" cx="10" cy="-10" r="2.5" />
               <text textAnchor="middle" dy="4">
-                {agent.name.slice(0, 6)}
+                {agent.name.slice(0, 7)}
               </text>
             </g>
           );
         })}
+        {hasSwarm ? (
+          <text className="row-label" x={16} y={height * 0.14}>
+            Main team
+          </text>
+        ) : null}
+        {hasSwarm ? (
+          <text className="row-label" x={16} y={height * 0.64}>
+            Swarm cores
+          </text>
+        ) : null}
       </svg>
       <div className="swarm-legend quiet">
-        <span className="leg active">Data flow</span>
+        <span className="leg team">Team wire</span>
         <span className="leg handoff">Review handoff</span>
-        <span className="leg share">Shared project</span>
+        <span className="leg assist">Swarm assist</span>
+        <span className="leg active">Live job</span>
       </div>
     </section>
   );
@@ -138,7 +201,7 @@ function LaneBoard({ busy, slots }: { busy: string[]; slots: number }) {
       </div>
       <div className="lane-meter" aria-hidden="true">
         <i style={{ width: `${pct}%` }} />
-        <span className="electron-sweep" />
+        {fill ? <span className="electron-sweep" /> : null}
       </div>
       <div
         className="lane-grid"

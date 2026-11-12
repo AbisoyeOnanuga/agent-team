@@ -38,6 +38,19 @@ def test_configured_shape_survives_free_plan(tmp_path: Path, monkeypatch):
     assert store.max_lanes() == 18
 
 
+def test_team_wires_and_live_traffic(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'wires.db'}")
+    store.init_db()
+    store.set_plan("scale")
+    store.set_team_size(6)
+    links = store.collaboration_links()
+    pairs = {(link["from"], link["to"], link["kind"]) for link in links}
+    assert ("agent-api", "agent-ui", "team") in pairs or ("agent-ui", "agent-api", "team") in pairs
+    assert any(link["kind"] == "handoff" for link in links)
+    assert any(link["kind"] == "assist" for link in links)
+    assert all(link["live"] is False for link in links)
+
+
 def test_plan_api_accepts_factory_width(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'plan.db'}")
     monkeypatch.setenv("CONSOLE_PIN", "2468")

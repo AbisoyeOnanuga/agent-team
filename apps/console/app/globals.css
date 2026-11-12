@@ -771,8 +771,12 @@ html[data-theme="light"] .error { color: #9d2b18; }
   stroke: var(--amber);
   stroke-width: 0.8;
   stroke-dasharray: 3 5;
+  opacity: 0.35;
+}
+
+.unit-core-ring.live {
+  opacity: 0.75;
   animation: link-flow 3s linear infinite;
-  opacity: 0.55;
 }
 
 .unit-core-label {
@@ -782,24 +786,43 @@ html[data-theme="light"] .error { color: #9d2b18; }
   letter-spacing: 0.18em;
 }
 
-.swarm-link {
-  fill: none;
-  stroke-width: 1.4;
-  stroke-dasharray: 4 8;
-  animation: link-flow 2.2s linear infinite;
-  opacity: 0.85;
+.map-blurb {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
-.swarm-link.active { stroke: var(--amber); stroke-width: 2; }
-.swarm-link.handoff { stroke: var(--hold); }
-.swarm-link.share { stroke: var(--live); opacity: 0.65; }
-.swarm-link.local { stroke-dasharray: 2 7; }
-.swarm-link.cloud { stroke-dasharray: 7 4; }
-.swarm-link.mixed { stroke-dasharray: 4 8; }
+.row-label {
+  fill: var(--paper-dim);
+  font-size: 10px;
+  font-family: var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.swarm-link {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-dasharray: 5 7;
+  opacity: 0.45;
+}
+
+.swarm-link.team { stroke: var(--amber); stroke-dasharray: none; opacity: 0.7; }
+.swarm-link.handoff { stroke: var(--hold); stroke-dasharray: 6 5; opacity: 0.65; }
+.swarm-link.assist { stroke: var(--live); stroke-dasharray: 3 6; opacity: 0.55; }
+.swarm-link.share { stroke: var(--paper-dim); opacity: 0.35; }
+.swarm-link.live {
+  opacity: 1;
+  stroke-width: 2;
+  animation: link-flow 1.8s linear infinite;
+}
 
 .electron { fill: var(--amber); filter: drop-shadow(0 0 3px rgba(226, 162, 58, 0.9)); }
 .electron.handoff { fill: var(--hold); }
-.electron.share { fill: var(--live); }
+.electron.assist { fill: var(--live); }
+.electron.share { fill: var(--paper-dim); }
 
 .swarm-node .node-body {
   fill: var(--field);
@@ -870,9 +893,10 @@ html[data-theme="light"] .error { color: #9d2b18; }
   background: var(--paper-dim);
 }
 
+.swarm-legend .team::before,
 .swarm-legend .active::before { background: var(--amber); }
 .swarm-legend .handoff::before { background: var(--hold); }
-.swarm-legend .share::before { background: var(--live); }
+.swarm-legend .assist::before { background: var(--live); }
 
 .lane-board { margin-bottom: 8px; }
 

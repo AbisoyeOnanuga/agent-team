@@ -31,8 +31,9 @@ ROLE_BRIEFS = {
     ),
 }
 SWARM_BRIEF = (
-    "You are a parallel swarm teammate. Work only inside the locked files for this job. "
-    "Do not touch secrets. Read the shared note for handoffs. Stay in your folder."
+    "You are an extra swarm core that assists the main team. Work only inside the locked files. "
+    "Do not touch secrets. Read `.hackswarm/shared.md` for what UI, API, or Review already changed. "
+    "Stay in your folder and do not rewrite another role's unfinished work."
 )
 _GIT_LOCKS: dict[str, threading.Lock] = {}
 _GIT_GUARD = threading.Lock()

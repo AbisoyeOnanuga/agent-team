@@ -196,9 +196,26 @@ def cost_blurb(team: int, slots: int, cloud: str, privacy: str) -> str:
     return f"{mates}, {slots} jobs at once · {spend}. {tip}"
 
 
+# Extra cores after UI / API / Review. Each has a clear job and anchors to a main role.
+SWARM_ROLES: tuple[tuple[str, str, str], ...] = (
+    ("UI+", "Interface", "agent-ui"),
+    ("API+", "Services", "agent-api"),
+    ("QA+", "Review", "agent-review"),
+    ("Tests", "Checks", "agent-review"),
+    ("Docs", "Docs", "agent-ui"),
+    ("Fix", "Bugs", "agent-api"),
+    ("Polish", "Copy", "agent-ui"),
+    ("Data", "Data", "agent-api"),
+    ("Ops", "Tooling", "agent-review"),
+)
+
+
 def swarm_extra(index: int) -> dict[str, str]:
+    name, role, anchor = SWARM_ROLES[(index - 1) % len(SWARM_ROLES)]
+    label = name if index <= len(SWARM_ROLES) else f"{name}-{index}"
     return {
         "agent_id": f"agent-swarm-{index}",
-        "name": f"Swarm {index}",
-        "role": "Parallel",
+        "name": label,
+        "role": role,
+        "anchor": anchor,
     }

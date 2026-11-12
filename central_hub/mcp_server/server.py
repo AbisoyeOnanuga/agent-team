@@ -233,7 +233,9 @@ def init_db() -> None:
             """
             INSERT INTO projects (agent_id, name, role, repo_path)
             VALUES (?, ?, ?, NULL)
-            ON CONFLICT(agent_id) DO NOTHING
+            ON CONFLICT(agent_id) DO UPDATE SET
+                name = excluded.name,
+                role = excluded.role
             """,
             (agent["agent_id"], agent["name"], agent["role"]),
         )
@@ -241,7 +243,7 @@ def init_db() -> None:
             """
             INSERT INTO agent_registry (agent_id, teammate_name, current_tool, current_task, last_heartbeat)
             VALUES (?, ?, 'idle', NULL, ?)
-            ON CONFLICT(agent_id) DO NOTHING
+            ON CONFLICT(agent_id) DO UPDATE SET teammate_name = excluded.teammate_name
             """,
             (agent["agent_id"], agent["name"], now()),
         )
@@ -251,7 +253,7 @@ def init_db() -> None:
 
 def all_possible_agents() -> list[dict[str, str]]:
     extras = [swarm_extra(i) for i in range(1, TEAM_MAX - FREE_TEAM + 1)]
-    return [*AGENTS, *extras]
+    return [{**agent} for agent in (*AGENTS, *extras)]
 
 
 def configured_team_size() -> int:
@@ -1475,9 +1477,11 @@ def _busy_lanes() -> list[str]:
     return [row["provider"] for row in rows if row["provider"]]
 
 
-def collaboration_links() -> list[dict[str, str]]:
-    """Edges between active teammates for the Home swarm map."""
+def collaboration_links() -> list[dict[str, Any]]:
+    """Team wiring for Home: structural mates always, live traffic only when work moves."""
     privacy = privacy_mode()
+    lane = "local" if privacy == "local_first" else ("cloud" if privacy == "cloud_ok" else "mixed")
+    roster = {agent["agent_id"]: agent for agent in team_roster()}
     projects = {p["agent_id"]: p for p in list_projects()}
     open_tasks = [
         t
@@ -1485,21 +1489,60 @@ def collaboration_links() -> list[dict[str, str]]:
         if t["status"] in ("TODO", "IN_PROGRESS", "REVIEW") and t.get("assigned_agent")
     ]
     by_agent: dict[str, list[dict[str, Any]]] = {}
+    running: set[str] = set()
     for task in open_tasks:
-        by_agent.setdefault(task["assigned_agent"], []).append(task)
-    ids = [p["agent_id"] for p in list_projects()]
-    links: list[dict[str, str]] = []
+        agent_id = task["assigned_agent"]
+        by_agent.setdefault(agent_id, []).append(task)
+        if task["status"] == "IN_PROGRESS":
+            running.add(agent_id)
+
+    def live_pair(left: str, right: str) -> bool:
+        if left in running or right in running:
+            return True
+        return left in by_agent and right in by_agent
+
+    links: list[dict[str, Any]] = []
+
+    def add(left: str, right: str, kind: str) -> None:
+        if left not in roster or right not in roster:
+            return
+        if left == right:
+            return
+        a, b = sorted([left, right])
+        if any(link["from"] == a and link["to"] == b for link in links):
+            return
+        links.append(
+            {
+                "from": a,
+                "to": b,
+                "kind": kind,
+                "privacy": lane,
+                "live": live_pair(a, b),
+            }
+        )
+
+    # Main team always wired: UI ↔ API ↔ Review ↔ UI
+    add("agent-ui", "agent-api", "team")
+    add("agent-api", "agent-review", "handoff")
+    add("agent-ui", "agent-review", "handoff")
+
+    # Extra swarm cores plug into the main role they assist.
+    for agent in team_roster():
+        agent_id = agent["agent_id"]
+        if not agent_id.startswith("agent-swarm-"):
+            continue
+        anchor = agent.get("anchor") or "agent-ui"
+        add(agent_id, anchor, "assist")
+
+    # Same folder = shared project wire (only if not already linked).
+    ids = list(projects)
     for i, left in enumerate(ids):
         for right in ids[i + 1 :]:
-            a, b = projects[left], projects[right]
-            active = left in by_agent and right in by_agent
-            same_root = bool(a.get("repo_path") and a.get("repo_path") == b.get("repo_path"))
-            handoff = left == "agent-review" or right == "agent-review"
-            if not (active or same_root or handoff):
-                continue
-            kind = "handoff" if handoff else ("active" if active else "share")
-            lane = "local" if privacy == "local_first" else ("cloud" if privacy == "cloud_ok" else "mixed")
-            links.append({"from": left, "to": right, "kind": kind, "privacy": lane})
+            path_a = (projects[left].get("repo_path") or "").strip()
+            path_b = (projects[right].get("repo_path") or "").strip()
+            if path_a and path_a == path_b:
+                add(left, right, "share")
+
     return links
 
 

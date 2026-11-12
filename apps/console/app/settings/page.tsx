@@ -429,7 +429,12 @@ export default function SettingsPage() {
             <div className="folder-row" key={agent.agent_id}>
               <div>
                 <strong>{agent.name}</strong>
-                <div className="quiet">{hint?.job || "Parallel work in its own folder."}</div>
+                <div className="quiet">
+                  {hint?.job
+                    || (agent.agent_id.startsWith("agent-swarm-")
+                      ? `${agent.role} overflow — give it its own folder.`
+                      : "Assign a folder.")}
+                </div>
                 <p className="path-chip">{paths[agent.agent_id] || "No folder yet"}</p>
               </div>
               <button className="ghost" type="button" onClick={() => void openBrowse(agent.agent_id)}>
