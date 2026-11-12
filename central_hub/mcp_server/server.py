@@ -32,6 +32,8 @@ from central_hub.api.scale import (
     band_for,
     catalog as scale_catalog,
     cost_blurb,
+    scale_warnings,
+    shape_hint,
     swarm_extra,
 )
 
@@ -251,14 +253,27 @@ def all_possible_agents() -> list[dict[str, str]]:
     return [*AGENTS, *extras]
 
 
-def team_size() -> int:
-    if plan_mode() != "scale":
-        return FREE_TEAM
+def configured_team_size() -> int:
     try:
         size = int(_setting("team_size", str(FREE_TEAM)))
     except ValueError:
         size = FREE_TEAM
     return max(FREE_TEAM, min(TEAM_MAX, size))
+
+
+def configured_scale_slots() -> int:
+    try:
+        slots = int(_setting("scale_slots", str(FREE_SLOTS)))
+    except ValueError:
+        slots = FREE_SLOTS
+    return max(FREE_SLOTS, min(SCALE_SLOT_MAX, slots))
+
+
+def team_size() -> int:
+    """Effective roster width. Free always uses the core three."""
+    if plan_mode() != "scale":
+        return FREE_TEAM
+    return configured_team_size()
 
 
 def team_roster() -> list[dict[str, str]]:
@@ -505,13 +520,10 @@ def scale_cloud() -> str:
 
 
 def max_lanes() -> int:
+    """Effective parallel jobs. Free stays at two lanes."""
     if plan_mode() != "scale":
         return FREE_SLOTS
-    try:
-        slots = int(_setting("scale_slots", "4"))
-    except ValueError:
-        slots = 4
-    return max(FREE_SLOTS, min(SCALE_SLOT_MAX, slots))
+    return configured_scale_slots()
 
 
 def apply_stored_secrets() -> None:
@@ -1416,15 +1428,18 @@ def board_snapshot() -> dict[str, Any]:
         "privacy_hint": PRIVACY_MODES[privacy_mode()],
         "team_size": team_size(),
         "team_max": TEAM_MAX,
+        "slot_max": SCALE_SLOT_MAX,
+        "configured_team_size": configured_team_size(),
+        "configured_scale_slots": configured_scale_slots(),
         "scale_cloud": cloud,
         "scale_slots": max_lanes(),
-        "scale_band": (
-            band_for(team_size(), max_lanes()) if plan_mode() == "scale" else None
-        ),
+        "scale_band": band_for(configured_team_size(), configured_scale_slots()),
         "scale_bands": BANDS,
         "scale_catalog": scale_catalog(),
+        "shape_hint": shape_hint(configured_team_size(), configured_scale_slots()),
+        "scale_warnings": _scale_warnings(),
         "cost_hint": (
-            cost_blurb(team_size(), max_lanes(), cloud, privacy_mode())
+            cost_blurb(configured_team_size(), configured_scale_slots(), cloud, privacy_mode())
             if plan_mode() == "scale"
             else "Free: 3 teammates, 2 jobs at once. Lowest spend for everyday work."
         ),
@@ -1433,6 +1448,20 @@ def board_snapshot() -> dict[str, Any]:
         "busy_lanes": _busy_lanes(),
         "links": collaboration_links(),
     }
+
+
+def _scale_warnings() -> list[str]:
+    missing = [
+        project["name"]
+        for project in list_projects()
+        if not (project.get("repo_path") or "").strip()
+    ]
+    return scale_warnings(
+        plan_mode(),
+        configured_team_size(),
+        configured_scale_slots(),
+        missing,
+    )
 
 
 def _busy_lanes() -> list[str]:
@@ -1580,14 +1609,24 @@ def set_scale_cloud(name: str) -> dict[str, Any]:
 def set_scale_slots(slots: int) -> dict[str, Any]:
     value = max(FREE_SLOTS, min(SCALE_SLOT_MAX, int(slots)))
     _set_setting("scale_slots", str(value))
-    return {"success": True, "scale_slots": value}
+    return {
+        "success": True,
+        "scale_slots": value,
+        "configured_scale_slots": value,
+        "effective_scale_slots": max_lanes(),
+    }
 
 
 def set_team_size(size: int) -> dict[str, Any]:
     value = max(FREE_TEAM, min(TEAM_MAX, int(size)))
     _set_setting("team_size", str(value))
     init_db()
-    return {"success": True, "team_size": value}
+    return {
+        "success": True,
+        "team_size": value,
+        "configured_team_size": value,
+        "effective_team_size": team_size(),
+    }
 
 
 def set_cloud_key(provider: str, key: str) -> dict[str, Any]:

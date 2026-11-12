@@ -660,6 +660,32 @@ html[data-theme="light"] .error { color: #9d2b18; }
 
 .save-echo { margin: 0; }
 
+.shape-title {
+  margin: 12px 0 0;
+  font-family: var(--display);
+  font-size: 18px;
+  letter-spacing: -0.03em;
+}
+
+.stepper {
+  display: grid;
+  grid-template-columns: 48px 1fr 48px;
+  gap: 8px;
+  align-items: center;
+}
+
+.stepper input[type="range"] {
+  width: 100%;
+  padding: 0;
+  min-height: 32px;
+}
+
+.stepper button.ghost {
+  min-height: 44px;
+  padding: 0;
+  font-size: 22px;
+}
+
 .compute-unit {
   position: relative;
   display: grid;

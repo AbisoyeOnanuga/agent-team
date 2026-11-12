@@ -128,6 +128,41 @@ def band_for(team: int, slots: int) -> dict[str, Any]:
     return min(BANDS, key=score)
 
 
+def jobs_per_teammate(team: int, slots: int) -> float:
+    return slots / max(team, 1)
+
+
+def shape_hint(team: int, slots: int) -> str:
+    ratio = jobs_per_teammate(team, slots)
+    if slots < team:
+        return "Jobs below teammate count — some cores stay dark."
+    if ratio <= 2.2:
+        return "Healthy load: about 1–2 jobs per teammate."
+    if ratio <= 3.0:
+        return "Wide rack. Gains need split folders and a high-throughput hub."
+    return "Jobs far above teammates — mostly queue depth and spend unless work is already split."
+
+
+def scale_warnings(
+    plan: str,
+    team: int,
+    slots: int,
+    missing_folders: list[str],
+) -> list[str]:
+    notes: list[str] = []
+    if plan != "scale" and (team > FREE_TEAM or slots > FREE_SLOTS):
+        notes.append("Scale shape is saved, but Free is on — turn on Scale to use it.")
+    if missing_folders:
+        names = ", ".join(missing_folders[:4])
+        more = "…" if len(missing_folders) > 4 else ""
+        notes.append(f"Folder missing for {names}{more}. Assign folders before they can work.")
+    if plan == "scale" and slots > team * 3:
+        notes.append("Many more jobs than teammates — add teammates or lower jobs for better cost.")
+    if plan == "scale" and team > FREE_TEAM and slots < team:
+        notes.append("More teammates than jobs — raise jobs or lower team size.")
+    return notes
+
+
 def cost_blurb(team: int, slots: int, cloud: str, privacy: str) -> str:
     meta = SCALE_PROVIDERS.get(cloud) or SCALE_PROVIDERS["openrouter"]
     index = float(meta["cost_index"])

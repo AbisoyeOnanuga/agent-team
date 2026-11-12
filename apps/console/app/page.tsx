@@ -265,7 +265,11 @@ export default function BoardPage() {
       <SwarmMap agents={agents} links={board?.links ?? []} board={board} />
       <LaneBoard busy={busyLanes} slots={slots} />
       <p className="quiet lane-line">{statusLine(board)}</p>
+      {board?.shape_hint ? <p className="quiet cost-hint">{board.shape_hint}</p> : null}
       {board?.cost_hint ? <p className="quiet cost-hint">{board.cost_hint}</p> : null}
+      {(board?.scale_warnings ?? []).map((note) => (
+        <p className="banner" key={note}>{note}</p>
+      ))}
       {board?.privacy_hint ? <p className="quiet">{board.privacy_hint}</p> : null}
       {board?.model_offline ? (
         <p className="banner">No model is ready. In Setup, add a cloud key or start local Ollama.</p>

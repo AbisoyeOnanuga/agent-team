@@ -41,18 +41,21 @@ export default function SettingsPage() {
     setMessage(text);
   }
 
-  async function load() {
+  async function load(opts?: { syncShape?: boolean }) {
     const response = await hub("/api/board");
     if (!response.ok) return;
     const next = (await response.json()) as Board;
     setBoard(next);
     setPaths(Object.fromEntries(next.agents.map((agent) => [agent.agent_id, agent.repo_path || ""])));
-    setSlots(next.scale_slots || 4);
-    setTeamSize(next.team_size || 3);
+    // Always bind configured intent (not Free-capped effective values).
+    if (opts?.syncShape !== false) {
+      setSlots(next.configured_scale_slots ?? next.scale_slots ?? 4);
+      setTeamSize(next.configured_team_size ?? next.team_size ?? 3);
+    }
   }
 
   useEffect(() => {
-    void load();
+    void load({ syncShape: true });
   }, []);
 
   useEffect(() => {
@@ -61,21 +64,32 @@ export default function SettingsPage() {
     return () => window.clearTimeout(timer);
   }, [message]);
 
-  async function putPlan(body: Record<string, unknown>) {
+  async function putPlan(body: Record<string, unknown>, opts?: { syncShape?: boolean }) {
     setMessage("");
     const response = await hub("/api/plan", { method: "PUT", body: JSON.stringify(body) });
+    const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
       flash(hubDetail(data, "Could not save that setting."), false);
       return;
     }
-    setApiKey("");
-    await load();
-    if (body.scale_slots != null || body.team_size != null) {
-      flash(`Saved · ${body.team_size ?? teamSize} teammates · ${body.scale_slots ?? slots} jobs`);
+    if (body.api_key) setApiKey("");
+    const shapeTouched = body.scale_slots != null || body.team_size != null;
+    await load({ syncShape: opts?.syncShape ?? shapeTouched });
+    if (shapeTouched) {
+      const team = Number(data.configured_team_size ?? body.team_size ?? teamSize);
+      const jobs = Number(data.configured_scale_slots ?? body.scale_slots ?? slots);
+      flash(`Saved · ${team} teammates · ${jobs} jobs`);
     } else {
       flash("Saved");
     }
+  }
+
+  function nudge(kind: "team" | "jobs", delta: number) {
+    if (kind === "team") {
+      setTeamSize((current) => Math.max(3, Math.min(9, current + delta)));
+      return;
+    }
+    setSlots((current) => Math.max(2, Math.min(24, current + delta)));
   }
 
   async function chooseModel(provider: string) {
@@ -188,10 +202,10 @@ export default function SettingsPage() {
       <section className="card stack">
         <h2>Plan</h2>
         <div className="actions">
-          <button className={plan === "free" ? "" : "ghost"} type="button" onClick={() => void putPlan({ plan: "free" })}>
+          <button className={plan === "free" ? "" : "ghost"} type="button" onClick={() => void putPlan({ plan: "free" }, { syncShape: false })}>
             Free
           </button>
-          <button className={plan === "scale" ? "" : "ghost"} type="button" onClick={() => void putPlan({ plan: "scale" })}>
+          <button className={plan === "scale" ? "" : "ghost"} type="button" onClick={() => void putPlan({ plan: "scale" }, { syncShape: false })}>
             Scale
           </button>
         </div>
@@ -210,7 +224,7 @@ export default function SettingsPage() {
               key={id}
               className={board?.privacy === id ? "" : "ghost"}
               type="button"
-              onClick={() => void putPlan({ privacy: id })}
+              onClick={() => void putPlan({ privacy: id }, { syncShape: false })}
             >
               {label}
             </button>
@@ -243,7 +257,7 @@ export default function SettingsPage() {
                 key={item.id}
                 className={board?.scale_cloud === item.id ? "provider picked" : "provider"}
                 type="button"
-                onClick={() => void putPlan({ scale_cloud: item.id })}
+                onClick={() => void putPlan({ scale_cloud: item.id }, { syncShape: false })}
               >
                 <strong>{item.label}</strong>
                 <span>{item.why}</span>
@@ -266,12 +280,13 @@ export default function SettingsPage() {
               placeholder={board?.cloud_key_set ? "•••••••• (blank keeps current)" : "Paste from your account"}
             />
           </label>
-          <h3 style={{ margin: 0, fontSize: 18 }}>Scale shape</h3>
           <div className="actions">
             {(board?.scale_bands ?? []).map((band) => (
               <button
                 key={band.id}
-                className={board?.scale_band?.id === band.id ? "" : "ghost"}
+                className={
+                  teamSize === band.team && slots === band.slots ? "" : "ghost"
+                }
                 type="button"
                 onClick={() => {
                   setTeamSize(band.team);
@@ -283,31 +298,59 @@ export default function SettingsPage() {
             ))}
           </div>
           <p className="quiet">
-            {(board?.scale_bands ?? []).find((band) => band.id === board?.scale_band?.id)?.fit
-              || "Team = core three. Swarm = more teammates. Project = widest jobs. More is not always better."}
+            {(board?.scale_bands ?? []).find((band) => band.team === teamSize && band.slots === slots)?.fit
+              || board?.shape_hint
+              || "Team = core three. Swarm = more teammates. Project = widest jobs."}
+          </p>
+
+          <h3 className="shape-title">Scale shape</h3>
+          <p className="quiet">
+            Aim for about 2 jobs per teammate. Saved shape: {board?.configured_team_size ?? "—"} teammates ·{" "}
+            {board?.configured_scale_slots ?? "—"} jobs
+            {plan === "scale" ? " · live now" : " · turn Scale on to go live"}
           </p>
           <label className="field">
             Teammates · {teamSize}
-            <input
-              type="range"
-              min={3}
-              max={9}
-              step={1}
-              value={teamSize}
-              onChange={(event) => setTeamSize(Number(event.target.value))}
-            />
+            <div className="stepper">
+              <button className="ghost" type="button" onClick={() => nudge("team", -1)} aria-label="Fewer teammates">
+                −
+              </button>
+              <input
+                type="range"
+                min={3}
+                max={9}
+                step={1}
+                value={teamSize}
+                onChange={(event) => setTeamSize(Number(event.target.value))}
+              />
+              <button className="ghost" type="button" onClick={() => nudge("team", 1)} aria-label="More teammates">
+                +
+              </button>
+            </div>
           </label>
           <label className="field">
             Jobs at once · {slots}
-            <input
-              type="range"
-              min={2}
-              max={24}
-              step={1}
-              value={slots}
-              onChange={(event) => setSlots(Number(event.target.value))}
-            />
+            <div className="stepper">
+              <button className="ghost" type="button" onClick={() => nudge("jobs", -1)} aria-label="Fewer jobs">
+                −
+              </button>
+              <input
+                type="range"
+                min={2}
+                max={24}
+                step={1}
+                value={slots}
+                onChange={(event) => setSlots(Number(event.target.value))}
+              />
+              <button className="ghost" type="button" onClick={() => nudge("jobs", 1)} aria-label="More jobs">
+                +
+              </button>
+            </div>
           </label>
+          <p className="quiet">{board?.shape_hint}</p>
+          {(board?.scale_warnings ?? []).map((note) => (
+            <p className="banner" key={note}>{note}</p>
+          ))}
           <button
             className="wide"
             type="button"

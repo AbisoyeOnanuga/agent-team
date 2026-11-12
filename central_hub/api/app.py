@@ -246,6 +246,7 @@ def choose_model(request: Request, body: ModelBody) -> dict[str, Any]:
 def write_plan(request: Request, body: PlanBody) -> dict[str, Any]:
     _require(request)
     out: dict[str, Any] = {"success": True}
+    # Apply plan first so effective caps match configured shape on the same request.
     if body.plan is not None:
         result = store.set_plan(body.plan)
         if not result.get("success"):
@@ -261,10 +262,10 @@ def write_plan(request: Request, body: PlanBody) -> dict[str, Any]:
         if not result.get("success"):
             raise HTTPException(status_code=400, detail=result.get("error", "Rejected"))
         out.update(result)
-    if body.scale_slots is not None:
-        out.update(store.set_scale_slots(body.scale_slots))
     if body.team_size is not None:
         out.update(store.set_team_size(body.team_size))
+    if body.scale_slots is not None:
+        out.update(store.set_scale_slots(body.scale_slots))
     key = (body.api_key or "").strip()
     if key:
         cloud = body.scale_cloud or store.scale_cloud()
@@ -272,6 +273,13 @@ def write_plan(request: Request, body: PlanBody) -> dict[str, Any]:
         if not result.get("success"):
             raise HTTPException(status_code=400, detail=result.get("error", "Rejected"))
         out["key_set"] = True
+    snap = store.board_snapshot()
+    out["configured_team_size"] = snap["configured_team_size"]
+    out["configured_scale_slots"] = snap["configured_scale_slots"]
+    out["team_size"] = snap["team_size"]
+    out["scale_slots"] = snap["scale_slots"]
+    out["shape_hint"] = snap["shape_hint"]
+    out["scale_warnings"] = snap["scale_warnings"]
     return out
 
 

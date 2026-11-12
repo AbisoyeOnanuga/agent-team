@@ -83,11 +83,16 @@ export type Board = {
   privacy_hint?: string;
   team_size?: number;
   team_max?: number;
+  slot_max?: number;
+  configured_team_size?: number;
+  configured_scale_slots?: number;
   scale_cloud?: string;
   scale_slots?: number;
   scale_band?: ScaleBand | null;
   scale_bands?: ScaleBand[];
   scale_catalog?: ScaleProvider[];
+  shape_hint?: string;
+  scale_warnings?: string[];
   cost_hint?: string;
   cloud_key_set?: boolean;
   local_ready?: boolean;
