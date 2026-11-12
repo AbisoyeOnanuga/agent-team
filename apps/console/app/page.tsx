@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { CSSProperties, FormEvent, useEffect, useState } from "react";
 import { hub, hubDetail } from "../hub/client";
 import type { AgentCard, Board, TaskCard } from "../hub/types";
 import { FilePicker } from "./file-picker";
@@ -76,7 +76,7 @@ function LaneBoard({
       </div>
       <div
         className="lane-grid"
-        style={{ "--lane-cols": show <= 6 ? show : show <= 12 ? 6 : 8 } as React.CSSProperties}
+        style={{ "--lane-cols": show <= 6 ? show : show <= 12 ? 6 : 8 } as CSSProperties}
       >
         {Array.from({ length: show }, (_, index) => {
           const live = index < fill;

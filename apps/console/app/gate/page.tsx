@@ -1,8 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { hub } from "../../hub/client";
+import { hub, hubDetail } from "../../hub/client";
 import type { ApprovalCard } from "../../hub/types";
+
+const ACTION_LABEL: Record<string, string> = {
+  git_commit: "Save commit",
+  delete_files: "Delete files",
+  install_deps: "Install packages",
+  mark_done: "Mark finished",
+  edit_locked_files: "Edit files",
+  run_tests: "Run tests",
+};
 
 export default function GatePage() {
   const [gates, setGates] = useState<ApprovalCard[]>([]);
@@ -30,7 +39,7 @@ export default function GatePage() {
     });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      setError(body.detail || "The gate did not move.");
+      setError(hubDetail(body, "That choice did not go through."));
       return;
     }
     setNotes((current) => ({ ...current, [id]: "" }));
@@ -39,34 +48,35 @@ export default function GatePage() {
 
   return (
     <main className="stack">
-      <p className="eyebrow">Waiting on you</p>
-      <h1>Approve</h1>
-      <p className="quiet">
-        Each finished role waits here on its own. Approving one does not hold the other.
-      </p>
-      {gates.length === 0 ? <p className="quiet">Nothing is waiting. Routine work continues on its own.</p> : null}
+      <p className="eyebrow">Your call</p>
+      <h1>Review</h1>
+      <p className="quiet">They pause here before a commit, delete, or install. Approving one does not hold the others.</p>
+      {gates.length === 0 ? <p className="quiet">Nothing waiting. Keep working from Home.</p> : null}
       {gates.map((gate) => (
         <article className="ticket" key={gate.id}>
-          <div className="band">HOLD</div>
-          <p className="eyebrow" style={{ color: "var(--hold)" }}>{gate.action_class}</p>
+          <div className="band">PAUSE</div>
+          <p className="eyebrow" style={{ color: "var(--hold)" }}>
+            {ACTION_LABEL[gate.action_class] || gate.action_class}
+          </p>
           <h2>{gate.summary}</h2>
           <p>{gate.justification}</p>
-          <p><strong>Blast.</strong> {gate.blast_radius}</p>
+          <p><strong>What it touches.</strong> {gate.blast_radius}</p>
           {gate.diff_stat ? <pre className="diff">{gate.diff_stat}</pre> : null}
-          <p><strong>If you refuse.</strong> {gate.alternative}</p>
-          {gate.action_class === "git_push" ? <p>Push stays at the desk.</p> : null}
+          <p><strong>If you say no.</strong> {gate.alternative}</p>
+          {gate.action_class === "git_push" ? <p>Uploading to the internet stays on your PC.</p> : null}
           <label className="field">
-            Revise note
+            Change request
             <textarea
               value={notes[gate.id] || ""}
               onChange={(event) =>
                 setNotes((current) => ({ ...current, [gate.id]: event.target.value }))
               }
+              placeholder="Tell them what to fix"
             />
           </label>
           <div className="actions">
-            <button type="button" onClick={() => void decide(gate.id, "proceed")}>Proceed</button>
-            <button className="ghost" type="button" onClick={() => void decide(gate.id, "revise")}>Revise</button>
+            <button type="button" onClick={() => void decide(gate.id, "proceed")}>Looks good</button>
+            <button className="ghost" type="button" onClick={() => void decide(gate.id, "revise")}>Change it</button>
             <button className="stop" type="button" onClick={() => void decide(gate.id, "stop")}>Stop</button>
           </div>
         </article>

@@ -1,16 +1,13 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { hub } from "../../hub/client";
+import { hub, hubDetail } from "../../hub/client";
 import type { Board } from "../../hub/types";
 
 const MASTERS: Record<string, string> = {
-  "agent-ui":
-    "Interface worker. Change layout, copy, and client behavior only. Leave the server, the database, and secrets alone.",
-  "agent-api":
-    "Services worker. Change handlers, routes, and data access only. Do not restyle the interface or touch secrets.",
-  "agent-review":
-    "Review worker. Read what the others already changed, then fix breaks. Do not widen the task or rewrite their work.",
+  "agent-ui": "Changes screens and client behavior only. Leaves the server alone.",
+  "agent-api": "Changes server routes and data only. Leaves the look alone.",
+  "agent-review": "Reads what others changed, then fixes breaks without rewriting their work.",
 };
 
 export default function SteerPage() {
@@ -42,19 +39,19 @@ export default function SteerPage() {
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        setError(body.detail || `Could not save ${agent.name}.`);
+        setError(hubDetail(body, `Could not save ${agent.name}.`));
         return;
       }
     }
-    setSent("Saved. Each role reads its extra prompt on every task until you change it here.");
+    setSent("Saved. Each teammate reads this on every job until you change it.");
   }
 
   return (
     <main>
-      <p className="eyebrow">Each role</p>
-      <h1>Prompts</h1>
+      <p className="eyebrow">Standing rules</p>
+      <h1>Guide</h1>
       <p className="quiet">
-        Add a standing prompt for each role from the phone. It is added after that role&apos;s built-in brief, and it stays until you edit it.
+        Extra instructions for each teammate. Useful when you are away from the desk.
       </p>
       <form className="stack" style={{ marginTop: 16 }} onSubmit={onSubmit}>
         {(board?.agents ?? []).map((agent) => (
@@ -63,21 +60,21 @@ export default function SteerPage() {
               <strong>{agent.name}</strong>
               <div className="meta">{agent.role}</div>
             </div>
-            <p className="quiet">Built in. {MASTERS[agent.agent_id]}</p>
+            <p className="quiet">Always on. {MASTERS[agent.agent_id]}</p>
             <label className="field">
-              Extra prompt
+              Your extra note
               <textarea
                 value={briefs[agent.agent_id] || ""}
                 onChange={(event) =>
                   setBriefs((current) => ({ ...current, [agent.agent_id]: event.target.value }))
                 }
-                placeholder="Example: keep copy short, and do not restyle the map."
+                placeholder="Example: keep text short, do not restyle the map."
               />
             </label>
           </article>
         ))}
         {error ? <p className="error">{error}</p> : null}
-        <button className="wide" type="submit">Save prompts</button>
+        <button className="wide" type="submit">Save guides</button>
         {sent ? <p className="quiet">{sent}</p> : null}
       </form>
     </main>

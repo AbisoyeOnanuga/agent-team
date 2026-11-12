@@ -115,11 +115,11 @@ export default function TapePage() {
 
   return (
     <main>
-      <p className="eyebrow">Activity</p>
-      <h1>Log</h1>
-      <p className="quiet">Newest lines stay at the bottom. One edit stays in one block.</p>
+      <p className="eyebrow">Live feed</p>
+      <h1>Activity</h1>
+      <p className="quiet">Newest at the bottom. Related lines stay together.</p>
       <div className="tape" ref={scroller}>
-        {blocks.length === 0 ? <p className="quiet">Waiting for the first line from the desk.</p> : null}
+        {blocks.length === 0 ? <p className="quiet">Nothing yet. Send a job from Home.</p> : null}
         {blocks.map((block) => (
           <article className={`line ${block.kind}`} key={block.key}>
             <div className="kind">{block.kind}</div>

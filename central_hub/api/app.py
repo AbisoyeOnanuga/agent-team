@@ -62,6 +62,15 @@ class BriefBody(BaseModel):
     brief: str = Field(default="", max_length=4000)
 
 
+class PlanBody(BaseModel):
+    plan: Optional[str] = None
+    privacy: Optional[str] = None
+    scale_cloud: Optional[str] = None
+    scale_slots: Optional[int] = Field(default=None, ge=2, le=24)
+    # Empty string means "keep current key"; only validate when a real key is sent.
+    api_key: Optional[str] = Field(default=None, max_length=512)
+
+
 @asynccontextmanager
 async def _lifespan(_: FastAPI):
     from teammate_client.aider_runner import load_env
@@ -69,6 +78,7 @@ async def _lifespan(_: FastAPI):
     load_env()
     store.init_db()
     store.sync_pin_from_env()
+    store.apply_stored_secrets()
     stop = None
     if os.getenv("HACKSWARM_WORKER", "1") != "0":
         import threading
@@ -229,6 +239,37 @@ def choose_model(request: Request, body: ModelBody) -> dict[str, Any]:
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error", "Rejected"))
     return result
+
+
+@app.put("/api/plan")
+def write_plan(request: Request, body: PlanBody) -> dict[str, Any]:
+    _require(request)
+    out: dict[str, Any] = {"success": True}
+    if body.plan is not None:
+        result = store.set_plan(body.plan)
+        if not result.get("success"):
+            raise HTTPException(status_code=400, detail=result.get("error", "Rejected"))
+        out.update(result)
+    if body.privacy is not None:
+        result = store.set_privacy(body.privacy)
+        if not result.get("success"):
+            raise HTTPException(status_code=400, detail=result.get("error", "Rejected"))
+        out.update(result)
+    if body.scale_cloud is not None:
+        result = store.set_scale_cloud(body.scale_cloud)
+        if not result.get("success"):
+            raise HTTPException(status_code=400, detail=result.get("error", "Rejected"))
+        out.update(result)
+    if body.scale_slots is not None:
+        out.update(store.set_scale_slots(body.scale_slots))
+    key = (body.api_key or "").strip()
+    if key:
+        cloud = body.scale_cloud or store.scale_cloud()
+        result = store.set_cloud_key(cloud, key)
+        if not result.get("success"):
+            raise HTTPException(status_code=400, detail=result.get("error", "Rejected"))
+        out["key_set"] = True
+    return out
 
 
 @app.get("/api/folders")

@@ -42,7 +42,25 @@ PROVIDER_CONFIGS = {
         "model": "openrouter/meta-llama/llama-3.3-70b-instruct:free",
         "api_base": "https://openrouter.ai/api/v1",
         "api_key_env": "OPENROUTER_API_KEY",
-        "desc": "OpenRouter Free tier models"
+        "desc": "OpenRouter. One key for many models."
+    },
+    "openai": {
+        "model": "openai/gpt-4o-mini",
+        "api_base": "https://api.openai.com/v1",
+        "api_key_env": "OPENAI_API_KEY",
+        "desc": "OpenAI"
+    },
+    "anthropic": {
+        "model": "anthropic/claude-sonnet-4-5",
+        "api_base": "https://api.anthropic.com",
+        "api_key_env": "ANTHROPIC_API_KEY",
+        "desc": "Anthropic Claude"
+    },
+    "nvidia": {
+        "model": "openai/meta/llama-3.3-70b-instruct",
+        "api_base": "https://integrate.api.nvidia.com/v1",
+        "api_key_env": "NVIDIA_API_KEY",
+        "desc": "NVIDIA NIM"
     },
     "ollama": {
         "model": "ollama/gemma3:4b",

@@ -21,6 +21,16 @@ import urllib.request
 import uuid
 
 from central_hub.api.policy import ACTION_CLASSES, PRESETS, preset_rows
+from central_hub.api.scale import (
+    BANDS,
+    FREE_SLOTS,
+    PRIVACY_MODES,
+    SCALE_PROVIDERS,
+    SCALE_SLOT_MAX,
+    band_for,
+    catalog as scale_catalog,
+    cost_blurb,
+)
 
 AGENTS = (
     {"agent_id": "agent-ui", "name": "UI", "role": "Interface"},
@@ -434,13 +444,123 @@ def _ollama_ready() -> bool:
     return ok
 
 
-def lane_ready(name: str) -> bool:
-    if name == "ollama":
-        return _ollama_ready()
-    if name != "gemini":
-        return False
-    value = os.getenv("GEMINI_API_KEY", "").strip()
+def _setting(key: str, default: str = "") -> str:
+    conn = connect()
+    row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    conn.close()
+    return row["value"] if row and row["value"] is not None else default
+
+
+def _set_setting(key: str, value: str) -> None:
+    conn = connect()
+    conn.execute(
+        """
+        INSERT INTO settings (key, value) VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        """,
+        (key, value),
+    )
+    conn.commit()
+    conn.close()
+
+
+def plan_mode() -> str:
+    value = _setting("plan", "free").strip().lower()
+    return value if value in ("free", "scale") else "free"
+
+
+def privacy_mode() -> str:
+    value = _setting("privacy", "balanced").strip().lower()
+    return value if value in PRIVACY_MODES else "balanced"
+
+
+def scale_cloud() -> str:
+    value = _setting("scale_cloud", "openrouter").strip().lower()
+    return value if value in SCALE_PROVIDERS else "openrouter"
+
+
+def max_lanes() -> int:
+    if plan_mode() != "scale":
+        return FREE_SLOTS
+    try:
+        slots = int(_setting("scale_slots", "4"))
+    except ValueError:
+        slots = 4
+    return max(FREE_SLOTS, min(SCALE_SLOT_MAX, slots))
+
+
+def apply_stored_secrets() -> None:
+    from central_hub import vault
+
+    conn = connect()
+    rows = conn.execute(
+        "SELECT key, value FROM settings WHERE key LIKE 'secret:%' OR key LIKE 'sealed:%'"
+    ).fetchall()
+    conn.close()
+    for row in rows:
+        kind, env_name = row["key"].split(":", 1)
+        raw = row["value"] or ""
+        if not raw:
+            continue
+        try:
+            if kind == "sealed":
+                import base64
+
+                value = vault.open_(base64.b64decode(raw.encode("ascii")))
+            else:
+                value = raw.strip()
+        except (OSError, ValueError):
+            continue
+        if value and not value.startswith("your_"):
+            os.environ[env_name] = value
+
+
+def lane_base(name: str) -> str:
+    return (name or "").split("#", 1)[0]
+
+
+def _key_ready(env_name: str) -> bool:
+    value = os.getenv(env_name, "").strip()
     return bool(value) and not value.startswith("your_")
+
+
+def lane_ready(name: str) -> bool:
+    base = lane_base(name)
+    if base == "ollama":
+        return _ollama_ready()
+    if base == "gemini":
+        return _key_ready("GEMINI_API_KEY")
+    meta = SCALE_PROVIDERS.get(base)
+    if not meta:
+        return False
+    return _key_ready(meta["key_env"])
+
+
+def _lane_order() -> list[str]:
+    privacy = privacy_mode()
+    if plan_mode() == "scale":
+        cloud = scale_cloud()
+        slots = max_lanes()
+        local = 1 if lane_ready("ollama") else 0
+        cloud_n = max(1, slots - local)
+        lanes = [cloud if i == 0 else f"{cloud}#{i}" for i in range(cloud_n)]
+        if local:
+            if privacy == "local_first":
+                return ["ollama", *lanes]
+            if privacy == "cloud_ok":
+                return [*lanes, "ollama"]
+            return [lanes[0], "ollama", *lanes[1:]]
+        return lanes
+
+    first = active_provider()
+    if first not in ("gemini", "ollama"):
+        first = "gemini"
+    second = "ollama" if first == "gemini" else "gemini"
+    if privacy == "local_first" and lane_ready("ollama"):
+        return ["ollama", first] if first != "ollama" else ["ollama"]
+    if privacy == "cloud_ok" and first == "ollama" and lane_ready("gemini"):
+        return ["gemini", "ollama"]
+    return [first, second]
 
 
 def _free_provider(cursor: sqlite3.Cursor) -> Optional[str]:
@@ -453,13 +573,9 @@ def _free_provider(cursor: sqlite3.Cursor) -> Optional[str]:
             """
         )
     }
-    first = active_provider()
-    if first not in ("gemini", "ollama"):
-        first = "gemini"
-    second = "ollama" if first == "gemini" else "gemini"
-    lanes = [lane for lane in (first, second) if lane_ready(lane)]
+    lanes = [lane for lane in _lane_order() if lane_ready(lane)]
     if not lanes:
-        lanes = [first]
+        lanes = _lane_order()[:1]
     for lane in lanes:
         if lane not in busy:
             return lane
@@ -1247,7 +1363,10 @@ def drop_session(token: str) -> None:
 
 
 def board_snapshot() -> dict[str, Any]:
+    apply_stored_secrets()
     policy = get_policy()
+    cloud = scale_cloud()
+    cloud_meta = SCALE_PROVIDERS[cloud]
     return {
         "agents": [
             {
@@ -1266,7 +1385,32 @@ def board_snapshot() -> dict[str, Any]:
         "provider": active_provider(),
         "ollama_model": ollama_model_name(),
         "ntfy_enabled": bool(os.getenv("NTFY_TOPIC", "").strip()),
+        "plan": plan_mode(),
+        "privacy": privacy_mode(),
+        "privacy_hint": PRIVACY_MODES[privacy_mode()],
+        "scale_cloud": cloud,
+        "scale_slots": max_lanes(),
+        "scale_band": band_for(max_lanes()) if plan_mode() == "scale" else None,
+        "scale_bands": BANDS,
+        "scale_catalog": scale_catalog(),
+        "cost_hint": (
+            cost_blurb(max_lanes(), cloud, privacy_mode())
+            if plan_mode() == "scale"
+            else "Free: two jobs at once. Lowest spend for everyday work."
+        ),
+        "cloud_key_set": _key_ready(cloud_meta["key_env"]),
+        "local_ready": lane_ready("ollama"),
+        "busy_lanes": _busy_lanes(),
     }
+
+
+def _busy_lanes() -> list[str]:
+    conn = connect()
+    rows = conn.execute(
+        "SELECT provider FROM tasks WHERE status = 'IN_PROGRESS' AND provider IS NOT NULL"
+    ).fetchall()
+    conn.close()
+    return [row["provider"] for row in rows if row["provider"]]
 
 
 def _agent_tool(agent_id: str) -> str:
@@ -1349,46 +1493,65 @@ def set_agent_brief(agent_id: str, brief: str) -> dict[str, Any]:
 
 def set_active_provider(name: str) -> dict[str, Any]:
     if name not in ("gemini", "ollama"):
-        return {"success": False, "error": "Choose Gemini or the local Ollama model."}
-    conn = connect()
-    conn.execute(
-        """
-        INSERT INTO settings (key, value) VALUES ('provider', ?)
-        ON CONFLICT(key) DO UPDATE SET value = excluded.value
-        """,
-        (name,),
-    )
-    conn.commit()
-    conn.close()
+        return {"success": False, "error": "Choose Gemini or the local model for Free."}
+    _set_setting("provider", name)
     return {"success": True, "provider": name}
 
 
+def set_plan(name: str) -> dict[str, Any]:
+    if name not in ("free", "scale"):
+        return {"success": False, "error": "Choose Free or Scale"}
+    _set_setting("plan", name)
+    return {"success": True, "plan": name}
+
+
+def set_privacy(name: str) -> dict[str, Any]:
+    if name not in PRIVACY_MODES:
+        return {"success": False, "error": "Unknown privacy mode"}
+    _set_setting("privacy", name)
+    return {"success": True, "privacy": name}
+
+
+def set_scale_cloud(name: str) -> dict[str, Any]:
+    if name not in SCALE_PROVIDERS:
+        return {"success": False, "error": "Pick a Scale cloud hub"}
+    _set_setting("scale_cloud", name)
+    return {"success": True, "scale_cloud": name}
+
+
+def set_scale_slots(slots: int) -> dict[str, Any]:
+    value = max(FREE_SLOTS, min(SCALE_SLOT_MAX, int(slots)))
+    _set_setting("scale_slots", str(value))
+    return {"success": True, "scale_slots": value}
+
+
+def set_cloud_key(provider: str, key: str) -> dict[str, Any]:
+    from central_hub import vault
+    import base64
+
+    meta = SCALE_PROVIDERS.get(provider)
+    if not meta:
+        return {"success": False, "error": "Unknown provider"}
+    text = key.strip()
+    if len(text) < 8:
+        return {"success": False, "error": "That key looks too short"}
+    env_name = meta["key_env"]
+    try:
+        sealed = base64.b64encode(vault.seal(text)).decode("ascii")
+        _set_setting(f"sealed:{env_name}", sealed)
+        conn = connect()
+        conn.execute("DELETE FROM settings WHERE key = ?", (f"secret:{env_name}",))
+        conn.commit()
+        conn.close()
+    except OSError:
+        _set_setting(f"secret:{env_name}", text)
+    os.environ[env_name] = text
+    return {"success": True, "provider": provider, "key_set": True}
+
+
 def model_configured() -> bool:
-    return _model_configured()
-
-
-def _model_configured() -> bool:
-    placeholders = {
-        "",
-        "your_gemini_api_key_here",
-        "your_mistral_api_key_here",
-        "your_openrouter_api_key_here",
-        "your_nvidia_api_key_here",
-        "your_opencode_api_key_here",
-        "your_xai_api_key_here",
-    }
-    for env_name in (
-        "XAI_API_KEY",
-        "GEMINI_API_KEY",
-        "MISTRAL_API_KEY",
-        "OPENROUTER_API_KEY",
-        "NVIDIA_API_KEY",
-        "GROQ_API_KEY",
-    ):
-        value = os.getenv(env_name, "").strip()
-        if value and value not in placeholders and not value.startswith("your_"):
-            return True
-    return os.getenv("HACKSWARM_PROVIDER", "").strip().lower() == "ollama"
+    apply_stored_secrets()
+    return any(lane_ready(lane) for lane in _lane_order())
 
 
 init_db()

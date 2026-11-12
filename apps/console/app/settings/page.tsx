@@ -1,38 +1,26 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { hub } from "../../hub/client";
+import { hub, hubDetail } from "../../hub/client";
 import type { Board } from "../../hub/types";
 
 const FOLDERS: Record<string, { job: string; example: string }> = {
-  "agent-ui": {
-    job: "Interface only. Screens, styles, and components.",
-    example: "D:\\Documents\\vscode\\trail-sketch\\src",
-  },
-  "agent-api": {
-    job: "Server only. Routes and handlers the page calls.",
-    example: "D:\\Documents\\vscode\\trail-sketch\\server",
-  },
-  "agent-review": {
-    job: "The folder just changed. src after a UI task, server after an API task.",
-    example: "D:\\Documents\\vscode\\trail-sketch\\src",
-  },
+  "agent-ui": { job: "Screens and buttons.", example: "…\\project\\src" },
+  "agent-api": { job: "Server and data.", example: "…\\project\\server" },
+  "agent-review": { job: "Check what just changed.", example: "…\\project\\src" },
 };
 
-function folderWarning(path: string): string {
-  const trimmed = path.trim().replace(/[\\/]+$/, "");
-  const lower = trimmed.toLowerCase();
-  if (lower.endsWith("\\trail-sketch") || lower.endsWith("/trail-sketch")) {
-    return "This is the project root. Choose src or server.";
-  }
-  return "";
-}
-
 const TOGGLES = [
-  ["git_commit", "Commit"],
-  ["delete_files", "Delete locked files"],
-  ["install_deps", "Install dependencies"],
+  ["git_commit", "Save a local commit"],
+  ["delete_files", "Delete chosen files"],
+  ["install_deps", "Install packages"],
+] as const;
+
+const PRIVACY = [
+  ["local_first", "Private first"],
+  ["balanced", "Share the load"],
+  ["cloud_ok", "Cloud first"],
 ] as const;
 
 export default function SettingsPage() {
@@ -43,30 +31,40 @@ export default function SettingsPage() {
   const [browseId, setBrowseId] = useState("");
   const [listing, setListing] = useState<{ path: string; parent: string; dirs: string[] } | null>(null);
   const [browseError, setBrowseError] = useState("");
-  const guideRef = useRef<HTMLDivElement>(null);
+  const [apiKey, setApiKey] = useState("");
+  const [slots, setSlots] = useState(4);
 
   async function load() {
     const response = await hub("/api/board");
     if (!response.ok) return;
     const next = (await response.json()) as Board;
     setBoard(next);
-    setPaths(
-      Object.fromEntries(next.agents.map((agent) => [agent.agent_id, agent.repo_path || ""])),
-    );
+    setPaths(Object.fromEntries(next.agents.map((agent) => [agent.agent_id, agent.repo_path || ""])));
+    setSlots(next.scale_slots || 4);
   }
 
   useEffect(() => {
     void load();
   }, []);
 
+  async function putPlan(body: Record<string, unknown>) {
+    setMessage("");
+    const response = await hub("/api/plan", { method: "PUT", body: JSON.stringify(body) });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      setMessage(hubDetail(data, "Could not save that setting."));
+      return;
+    }
+    setApiKey("");
+    setMessage("Saved.");
+    await load();
+  }
+
   async function chooseModel(provider: string) {
     setMessage("");
-    const response = await hub("/api/model", {
-      method: "PUT",
-      body: JSON.stringify({ provider }),
-    });
+    const response = await hub("/api/model", { method: "PUT", body: JSON.stringify({ provider }) });
     if (!response.ok) {
-      setMessage("That model was not selected.");
+      setMessage("Could not switch the Free model.");
       return;
     }
     await load();
@@ -74,12 +72,9 @@ export default function SettingsPage() {
 
   async function preset(name: string) {
     setMessage("");
-    const response = await hub("/api/policy", {
-      method: "PUT",
-      body: JSON.stringify({ preset: name }),
-    });
+    const response = await hub("/api/policy", { method: "PUT", body: JSON.stringify({ preset: name }) });
     if (!response.ok) {
-      setMessage("That level was not saved.");
+      setMessage("Could not save that safety level.");
       return;
     }
     await load();
@@ -92,7 +87,7 @@ export default function SettingsPage() {
       body: JSON.stringify({ action_class: action, mode: next }),
     });
     if (!response.ok) {
-      setMessage("Push, secrets, and files outside the lock stay off.");
+      setMessage("Push and secret files stay locked.");
       return;
     }
     await load();
@@ -109,11 +104,11 @@ export default function SettingsPage() {
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        setMessage(body.detail || `Could not save ${agentId}.`);
+        setMessage(hubDetail(body, "Could not save a folder."));
         return;
       }
     }
-    setMessage("Project folders saved.");
+    setMessage("Folders saved.");
     await load();
   }
 
@@ -127,7 +122,7 @@ export default function SettingsPage() {
         return;
       }
       const body = await response.json().catch(() => ({}));
-      setBrowseError(body.detail || "Could not list that folder.");
+      setBrowseError(hubDetail(body, "Could not open that folder."));
       return;
     }
     setListing((await response.json()) as { path: string; parent: string; dirs: string[] });
@@ -136,9 +131,6 @@ export default function SettingsPage() {
   async function openBrowse(agentId: string) {
     setBrowseId(agentId);
     await loadDirs(paths[agentId] || "");
-    window.setTimeout(() => {
-      guideRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
-    }, 0);
   }
 
   function useFolder() {
@@ -154,44 +146,171 @@ export default function SettingsPage() {
   }
 
   const modes = board?.policy.modes ?? {};
+  const plan = board?.plan || "free";
+  const cloud = board?.scale_catalog?.find((item) => item.id === board.scale_cloud);
 
   return (
     <main className="stack">
-      <p className="eyebrow">Models and folders</p>
-      <h1>Access</h1>
+      <p className="eyebrow">Your computer</p>
+      <h1>Setup</h1>
       <p className="quiet">
-        Current level: {board?.policy.preset || "…"}. Push and secret files never run from the phone.
-        {board?.ntfy_enabled ? " A phone buzz is configured." : " No buzz topic is set."}
+        Free is three teammates and two jobs at once. Scale opens more jobs on a cloud key you already own.
+        Keys never leave this PC.
       </p>
-      <div className="actions">
-        <button
-          className={board?.provider === "gemini" ? "" : "ghost"}
-          type="button"
-          onClick={() => void chooseModel("gemini")}
-        >
-          Gemini
-        </button>
-        <button
-          className={board?.provider === "ollama" ? "" : "ghost"}
-          type="button"
-          onClick={() => void chooseModel("ollama")}
-        >
-          Local {board?.ollama_model || "gemma3:4b"}
-        </button>
-      </div>
-      <div className="actions">
-        {["watch", "routine", "open"].map((name) => (
-          <button
-            key={name}
-            className={board?.policy.preset === name ? "" : "ghost"}
-            type="button"
-            onClick={() => void preset(name)}
-          >
-            {name}
+      {board?.cost_hint ? <p className="quiet">{board.cost_hint}</p> : null}
+
+      <section className="card stack">
+        <h2>Plan</h2>
+        <div className="actions">
+          <button className={plan === "free" ? "" : "ghost"} type="button" onClick={() => void putPlan({ plan: "free" })}>
+            Free
           </button>
-        ))}
-      </div>
-      <section className="stack">
+          <button className={plan === "scale" ? "" : "ghost"} type="button" onClick={() => void putPlan({ plan: "scale" })}>
+            Scale
+          </button>
+        </div>
+        <p className="quiet">
+          {plan === "scale"
+            ? "More jobs at once. One cloud account. Local model still available for private work."
+            : "Everyday: Gemini + local Ollama. Lowest spend."}
+        </p>
+      </section>
+
+      <section className="card stack">
+        <h2>Privacy</h2>
+        <div className="actions">
+          {PRIVACY.map(([id, label]) => (
+            <button
+              key={id}
+              className={board?.privacy === id ? "" : "ghost"}
+              type="button"
+              onClick={() => void putPlan({ privacy: id })}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="quiet">{board?.privacy_hint}</p>
+      </section>
+
+      {plan === "free" ? (
+        <section className="card stack">
+          <h2>Free brains</h2>
+          <div className="actions">
+            <button className={board?.provider === "gemini" ? "" : "ghost"} type="button" onClick={() => void chooseModel("gemini")}>
+              Gemini
+            </button>
+            <button className={board?.provider === "ollama" ? "" : "ghost"} type="button" onClick={() => void chooseModel("ollama")}>
+              Local {board?.ollama_model || "gemma3:4b"}
+            </button>
+          </div>
+        </section>
+      ) : (
+        <section className="card stack">
+          <h2>Cloud account</h2>
+          <p className="quiet">Pick one place to pay. OpenRouter fits most people who want many models under one key.</p>
+          <div className="provider-grid">
+            {(board?.scale_catalog ?? []).map((item) => (
+              <button
+                key={item.id}
+                className={board?.scale_cloud === item.id ? "provider picked" : "provider"}
+                type="button"
+                onClick={() => void putPlan({ scale_cloud: item.id })}
+              >
+                <strong>{item.label}</strong>
+                <span>{item.why}</span>
+              </button>
+            ))}
+          </div>
+          {cloud ? (
+            <p className="quiet">
+              Key from <a href={cloud.site} target="_blank" rel="noreferrer">{cloud.site.replace(/^https?:\/\//, "")}</a>
+              {board?.cloud_key_set ? " · saved here" : " · not saved yet"}
+            </p>
+          ) : null}
+          <label className="field">
+            API key
+            <input
+              type="password"
+              autoComplete="off"
+              value={apiKey}
+              onChange={(event) => setApiKey(event.target.value)}
+              placeholder={board?.cloud_key_set ? "•••••••• (blank keeps current)" : "Paste from your account"}
+            />
+          </label>
+          <h3 style={{ margin: 0, fontSize: 18 }}>How wide</h3>
+          <div className="actions">
+            {(board?.scale_bands ?? []).map((band) => {
+              const active =
+                slots <= band.slots &&
+                !(board?.scale_bands ?? []).some((other) => other.slots < band.slots && slots <= other.slots);
+              return (
+                <button
+                  key={band.id}
+                  className={active ? "" : "ghost"}
+                  type="button"
+                  onClick={() => setSlots(band.slots)}
+                >
+                  {band.label} · {band.slots}
+                </button>
+              );
+            })}
+          </div>
+          <p className="quiet">
+            {(board?.scale_bands ?? []).find(
+              (band) =>
+                slots <= band.slots &&
+                !(board?.scale_bands ?? []).some((other) => other.slots < band.slots && slots <= other.slots),
+            )?.fit || "Team for daily work. Swarm or Project when folders are already split."}
+          </p>
+          <label className="field">
+            Jobs at once · {slots}
+            <input
+              type="range"
+              min={2}
+              max={24}
+              step={1}
+              value={slots}
+              onChange={(event) => setSlots(Number(event.target.value))}
+            />
+          </label>
+          <button
+            className="wide"
+            type="button"
+            onClick={() =>
+              void putPlan({
+                scale_slots: slots,
+                ...(apiKey.trim() ? { api_key: apiKey.trim() } : {}),
+              })
+            }
+          >
+            Save Scale
+          </button>
+        </section>
+      )}
+
+      <section className="card stack">
+        <h2>Safety</h2>
+        <p className="quiet">
+          Level: {board?.policy.preset || "…"}. Push never runs from the phone.
+          {board?.ntfy_enabled ? " Phone buzz is on." : ""}
+        </p>
+        <div className="actions">
+          {[
+            ["watch", "Watch"],
+            ["routine", "Ask me"],
+            ["open", "Go ahead"],
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              className={board?.policy.preset === id ? "" : "ghost"}
+              type="button"
+              onClick={() => void preset(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         {TOGGLES.map(([action, label]) => {
           const mode = modes[action] || "approve_before";
           const auto = mode === "act_and_notify" || mode === "act_and_log";
@@ -199,7 +318,7 @@ export default function SettingsPage() {
             <article className="card agent" key={action}>
               <div>
                 <strong style={{ fontSize: 18 }}>{label}</strong>
-                <div className="quiet">{auto ? "Runs, and you are told" : "Waits for Proceed"}</div>
+                <div className="quiet">{auto ? "Runs, then tells you" : "Waits for your OK"}</div>
               </div>
               <button className="permit" type="button" onClick={() => void toggle(action, mode)}>
                 {auto ? "On" : "Ask"}
@@ -208,15 +327,33 @@ export default function SettingsPage() {
           );
         })}
       </section>
+
       <form className="card stack" onSubmit={savePaths}>
-        <h2>Projects</h2>
-        <p className="quiet">
-          Each role should get its own folder inside the project. The model only receives the locked files in that folder.
-        </p>
-        {browseId && listing ? (
-          <div className="guide" ref={guideRef}>
+        <h2>Folders</h2>
+        <p className="quiet">Tap Browse. Walk the folders with your thumb. Avoid typing long paths on the phone.</p>
+        {(board?.agents ?? []).map((agent) => {
+          const hint = FOLDERS[agent.agent_id];
+          return (
+            <div className="folder-row" key={agent.agent_id}>
+              <div>
+                <strong>{agent.name}</strong>
+                <div className="quiet">{hint?.job}</div>
+                <p className="path-chip">{paths[agent.agent_id] || "No folder yet"}</p>
+              </div>
+              <button className="ghost" type="button" onClick={() => void openBrowse(agent.agent_id)}>
+                Browse
+              </button>
+            </div>
+          );
+        })}
+        <button className="wide" type="submit">Save folders</button>
+      </form>
+
+      {browseId && listing ? (
+        <div className="sheet" role="dialog" aria-label="Choose folder">
+          <div className="sheet-panel">
             <p className="eyebrow">
-              Folder for {board?.agents.find((agent) => agent.agent_id === browseId)?.name || "this role"}
+              Folder for {board?.agents.find((agent) => agent.agent_id === browseId)?.name || "teammate"}
             </p>
             <p className="guide-path">{listing.path}</p>
             <div className="guide-actions">
@@ -228,9 +365,12 @@ export default function SettingsPage() {
               <button className="guide-action use" type="button" onClick={useFolder}>
                 Use this folder
               </button>
+              <button className="guide-action" type="button" onClick={() => { setBrowseId(""); setListing(null); }}>
+                Cancel
+              </button>
             </div>
             <div className="guide-list">
-              {listing.dirs.length === 0 ? <p className="quiet">No folders inside.</p> : null}
+              {listing.dirs.length === 0 ? <p className="quiet">No folders here.</p> : null}
               {listing.dirs.map((name) => (
                 <button
                   className="guide-folder"
@@ -244,33 +384,9 @@ export default function SettingsPage() {
             </div>
             {browseError ? <p className="error">{browseError}</p> : null}
           </div>
-        ) : null}
-        {(board?.agents ?? []).map((agent) => {
-          const hint = FOLDERS[agent.agent_id];
-          const warning = folderWarning(paths[agent.agent_id] || "");
-          const open = browseId === agent.agent_id && listing;
-          return (
-            <div className="stack" key={agent.agent_id}>
-              <label className="field">
-                {agent.name}
-                <span className="quiet">{hint?.job}</span>
-                <input
-                  value={paths[agent.agent_id] || ""}
-                  onChange={(event) =>
-                    setPaths((current) => ({ ...current, [agent.agent_id]: event.target.value }))
-                  }
-                  placeholder={hint?.example || "D:\\Documents\\vscode\\project\\src"}
-                />
-                {warning ? <span className="error">{warning}</span> : null}
-                <button className="ghost" type="button" onClick={() => void openBrowse(agent.agent_id)}>
-                  {open ? "Close browser" : "Browse"}
-                </button>
-              </label>
-            </div>
-          );
-        })}
-        <button className="wide" type="submit">Save folders</button>
-      </form>
+        </div>
+      ) : null}
+
       {message ? <p className="quiet">{message}</p> : null}
       <button className="ghost wide" type="button" onClick={() => void logout()}>Sign out</button>
     </main>

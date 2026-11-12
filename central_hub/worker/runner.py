@@ -39,7 +39,8 @@ def worker_loop(stop: Optional[threading.Event] = None) -> None:
     while stop is None or not stop.is_set():
         running = [thread for thread in running if thread.is_alive()]
         try:
-            if len(running) < 2 and store.next_todo() and store.peek_free_provider():
+            cap = store.max_lanes()
+            if len(running) < cap and store.next_todo() and store.peek_free_provider():
                 thread = threading.Thread(target=_safe_process, name="hackswarm-lane", daemon=True)
                 running.append(thread)
                 thread.start()
@@ -332,8 +333,8 @@ def _edit(task: dict, repo: Path, files: list[str], agent_id: str) -> None:
         message += "\n\nWhat the other workers already changed:\n" + shared
     if notes:
         message += "\n\nOperator notes:\n" + "\n".join(f"- {note}" for note in notes)
-    provider = task.get("provider") or store.active_provider()
-    if store.model_configured() and aider_available():
+    provider = store.lane_base(task.get("provider") or store.active_provider())
+    if store.lane_ready(provider) and aider_available():
         def on_line(line: str) -> None:
             store.record_event(line, kind="log", agent_id=agent_id, task_id=task["id"])
 
@@ -351,7 +352,7 @@ def _edit(task: dict, repo: Path, files: list[str], agent_id: str) -> None:
             f"Aider stopped with exit code {code} on {provider}. The locked files were left as they were."
         )
     store.record_event(
-        "Model offline. Wrote a dry-run note. Code files were not touched.",
+        f"{provider} is offline. Wrote a practice note. Code files were not touched.",
         kind="notify",
         agent_id=agent_id,
         task_id=task["id"],

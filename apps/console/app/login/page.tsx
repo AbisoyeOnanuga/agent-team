@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { hub } from "../../hub/client";
+import { hub, hubDetail } from "../../hub/client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -19,7 +19,7 @@ export default function LoginPage() {
     });
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
-      setError(body.detail || "The hub refused that PIN.");
+      setError(hubDetail(body, "The hub refused that PIN."));
       return;
     }
     router.push("/");
@@ -28,9 +28,9 @@ export default function LoginPage() {
   return (
     <main className="login">
       <form className="card stack" method="post" onSubmit={onSubmit}>
-        <p className="eyebrow">Sign in</p>
+        <p className="eyebrow">Welcome</p>
         <h1>Agent team</h1>
-        <p className="quiet">This PIN opens the team on this computer.</p>
+        <p className="quiet">Enter your PIN to open the crew on this computer.</p>
         <label className="field">
           PIN
           <span className="pin-row">
@@ -53,7 +53,7 @@ export default function LoginPage() {
           </span>
         </label>
         {error ? <p className="error">{error}</p> : null}
-        <button className="wide" type="submit">Open the board</button>
+        <button className="wide" type="submit">Open</button>
       </form>
     </main>
   );
