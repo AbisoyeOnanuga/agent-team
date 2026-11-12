@@ -50,42 +50,159 @@ function statusLine(board: Board | null): string {
 
 type Point = { x: number; y: number };
 
+const CORE_ORDER = ["agent-ui", "agent-api", "agent-review"] as const;
+const ANCHOR_OF: Record<string, string> = {
+  "agent-swarm-1": "agent-ui",
+  "agent-swarm-2": "agent-api",
+  "agent-swarm-3": "agent-review",
+  "agent-swarm-4": "agent-review",
+  "agent-swarm-5": "agent-ui",
+  "agent-swarm-6": "agent-api",
+  "agent-swarm-7": "agent-ui",
+  "agent-swarm-8": "agent-api",
+  "agent-swarm-9": "agent-review",
+};
+
 function layoutAgents(agents: AgentCard[], width: number, height: number) {
-  const core = agents.filter((agent) => !agent.agent_id.startsWith("agent-swarm-"));
+  const byId = Object.fromEntries(agents.map((agent) => [agent.agent_id, agent]));
+  const core = CORE_ORDER.map((id) => byId[id]).filter(Boolean) as AgentCard[];
   const swarm = agents.filter((agent) => agent.agent_id.startsWith("agent-swarm-"));
   const points: Record<string, Point> = {};
-  const pad = 36;
-  const coreY = swarm.length ? height * 0.28 : height * 0.5;
-  const swarmY = height * 0.78;
-
-  core.forEach((agent, index) => {
-    const span = Math.max(core.length - 1, 1);
-    const x = pad + ((width - pad * 2) * index) / span;
-    points[agent.agent_id] = { x: core.length === 1 ? width / 2 : x, y: coreY };
+  const pad = 40;
+  const coreY = swarm.length ? 70 : height / 2;
+  const colXs = CORE_ORDER.map((_, index) => {
+    const span = Math.max(CORE_ORDER.length - 1, 1);
+    return pad + ((width - pad * 2) * index) / span;
   });
-
-  swarm.forEach((agent, index) => {
-    const span = Math.max(swarm.length - 1, 1);
-    const x = pad + ((width - pad * 2) * index) / span;
-    points[agent.agent_id] = { x: swarm.length === 1 ? width / 2 : x, y: swarmY };
-  });
-
-  return {
-    points,
-    share: { x: width / 2, y: swarm.length ? height * 0.52 : height * 0.78 },
-    hasSwarm: swarm.length > 0,
+  const colX: Record<string, number> = {
+    "agent-ui": colXs[0],
+    "agent-api": colXs[1],
+    "agent-review": colXs[2],
   };
+
+  core.forEach((agent) => {
+    points[agent.agent_id] = { x: colX[agent.agent_id], y: coreY };
+  });
+
+  const columns: Record<string, AgentCard[]> = {
+    "agent-ui": [],
+    "agent-api": [],
+    "agent-review": [],
+  };
+  swarm.forEach((agent) => {
+    const anchor = ANCHOR_OF[agent.agent_id] || "agent-ui";
+    columns[anchor].push(agent);
+  });
+
+  const swarmTop = coreY + 110;
+  const rowGap = 52;
+  (Object.keys(columns) as Array<keyof typeof columns>).forEach((anchor) => {
+    columns[anchor].forEach((agent, row) => {
+      const count = columns[anchor].length;
+      const xSpread = count > 1 ? (row - (count - 1) / 2) * 22 : 0;
+      points[agent.agent_id] = {
+        x: colX[anchor] + xSpread,
+        y: swarmTop + row * rowGap,
+      };
+    });
+  });
+
+  const bottom = Math.max(
+    coreY + 40,
+    ...Object.values(points).map((point) => point.y + 36),
+  );
+
+  return { points, hasSwarm: swarm.length > 0, height: Math.max(height, bottom), coreY, colX };
 }
 
-function wirePath(a: Point, b: Point, bend: number) {
-  const mx = (a.x + b.x) / 2;
-  const my = (a.y + b.y) / 2;
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const len = Math.hypot(dx, dy) || 1;
-  const nx = (-dy / len) * bend;
-  const ny = (dx / len) * bend;
-  return `M ${a.x} ${a.y} Q ${mx + nx} ${my + ny} ${b.x} ${b.y}`;
+/** Straight orthogonal path with rounded corners — no diagonal chaos. */
+function roundedOrtho(points: Point[], radius = 10): string {
+  if (points.length < 2) return "";
+  if (points.length === 2) {
+    return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
+  }
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 1; i < points.length - 1; i += 1) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    const next = points[i + 1];
+    const v1x = curr.x - prev.x;
+    const v1y = curr.y - prev.y;
+    const v2x = next.x - curr.x;
+    const v2y = next.y - curr.y;
+    const len1 = Math.hypot(v1x, v1y) || 1;
+    const len2 = Math.hypot(v2x, v2y) || 1;
+    const r = Math.min(radius, len1 / 2, len2 / 2);
+    const p1 = { x: curr.x - (v1x / len1) * r, y: curr.y - (v1y / len1) * r };
+    const p2 = { x: curr.x + (v2x / len2) * r, y: curr.y + (v2y / len2) * r };
+    d += ` L ${p1.x} ${p1.y} Q ${curr.x} ${curr.y} ${p2.x} ${p2.y}`;
+  }
+  const last = points[points.length - 1];
+  d += ` L ${last.x} ${last.y}`;
+  return d;
+}
+
+function routeLink(
+  link: CollabLink,
+  points: Record<string, Point>,
+  coreY: number,
+): string | null {
+  const a = points[link.from];
+  const b = points[link.to];
+  if (!a || !b) return null;
+  const top = a.y <= b.y ? a : b;
+  const bottom = a.y <= b.y ? b : a;
+
+  if (link.kind === "team") {
+    // Adjacent core rail just under the nodes.
+    const y = coreY + 28;
+    return roundedOrtho([
+      { x: a.x, y: a.y + 18 },
+      { x: a.x, y },
+      { x: b.x, y },
+      { x: b.x, y: b.y + 18 },
+    ]);
+  }
+
+  if (link.kind === "handoff") {
+    const ids = [link.from, link.to];
+    const longSpan = ids.includes("agent-ui") && ids.includes("agent-review");
+    // UI–Review uses a lower rail; API–Review shares the team rail height.
+    const y = coreY + (longSpan ? 46 : 28);
+    return roundedOrtho([
+      { x: a.x, y: a.y + 18 },
+      { x: a.x, y },
+      { x: b.x, y },
+      { x: b.x, y: b.y + 18 },
+    ]);
+  }
+
+  if (link.kind === "assist") {
+    // Column trunk: up from swarm, then short stub if x differs — no shared diagonals.
+    if (Math.abs(a.x - b.x) < 1) {
+      return roundedOrtho([
+        { x: bottom.x, y: bottom.y - 16 },
+        { x: top.x, y: top.y + 18 },
+      ]);
+    }
+    // Join below the core rails so assist trunks never cross team/review wires.
+    const joinY = coreY + 64;
+    return roundedOrtho([
+      { x: bottom.x, y: bottom.y - 16 },
+      { x: bottom.x, y: joinY },
+      { x: top.x, y: joinY },
+      { x: top.x, y: top.y + 18 },
+    ]);
+  }
+
+  // Shared-folder wires stay on a quiet mid rail.
+  const y = Math.max(a.y, b.y) - 30;
+  return roundedOrtho([
+    { x: a.x, y: a.y - 16 },
+    { x: a.x, y },
+    { x: b.x, y },
+    { x: b.x, y: b.y - 16 },
+  ]);
 }
 
 function SwarmMap({
@@ -98,10 +215,10 @@ function SwarmMap({
   board: Board | null;
 }) {
   const width = 340;
-  const height = 300;
-  const { points, share, hasSwarm } = layoutAgents(agents, width, height);
+  const { points, hasSwarm, height, coreY } = layoutAgents(agents, width, 280);
   const working = agents.filter((agent) => agentState(agent, board) === "work").length;
-  const liveCount = links.filter((link) => link.live).length;
+  const wires = links.filter((link) => link.kind === "team" || link.kind === "handoff" || link.kind === "assist");
+  const liveCount = wires.filter((link) => link.live).length;
 
   return (
     <section className="compute-unit swarm-map" aria-label="Team compute unit">
@@ -114,32 +231,20 @@ function SwarmMap({
         </span>
       </div>
       <p className="quiet map-blurb">
-        Main team is UI ↔ API ↔ Review. Extra swarm cores assist one of those roles.
-        SHARE is the shared note file (`.hackswarm/shared.md`), not a model. Dots move only when a job is running.
+        UI ↔ API ↔ Review stay on clear rails. Swarm cores sit under the role they assist.
+        Moving dots appear only on a live job path.
       </p>
       <svg viewBox={`0 0 ${width} ${height}`} className="swarm-svg" role="img">
         <title>Teammate communication map</title>
-        <circle className="unit-core" cx={share.x} cy={share.y} r="22" />
-        <circle className={`unit-core-ring${liveCount ? " live" : ""}`} cx={share.x} cy={share.y} r="30" />
-        <text className="unit-core-label" x={share.x} y={share.y + 4} textAnchor="middle">
-          SHARE
-        </text>
-        {links.map((link, linkIndex) => {
-          const a = points[link.from];
-          const b = points[link.to];
-          if (!a || !b) return null;
-          const bend =
-            link.kind === "team" ? -28 - linkIndex * 4
-            : link.kind === "handoff" ? 26 + linkIndex * 3
-            : link.kind === "assist" ? (linkIndex % 2 === 0 ? 18 : -18)
-            : 12;
-          const d = wirePath(a, b, bend);
+        {wires.map((link, linkIndex) => {
+          const d = routeLink(link, points, coreY);
+          if (!d) return null;
           return (
             <g key={`${link.from}-${link.to}-${link.kind}`}>
-              <path className={`swarm-link ${link.kind} ${link.privacy}${link.live ? " live" : ""}`} d={d} />
+              <path className={`swarm-link ${link.kind}${link.live ? " live" : ""}`} d={d} />
               {link.live ? (
                 <circle className={`electron ${link.kind}`} r="2.6">
-                  <animateMotion dur={`${1.4 + (linkIndex % 3) * 0.25}s`} repeatCount="indefinite" path={d} />
+                  <animateMotion dur={`${1.35 + (linkIndex % 3) * 0.2}s`} repeatCount="indefinite" path={d} />
                 </circle>
               ) : null}
             </g>
@@ -166,21 +271,21 @@ function SwarmMap({
           );
         })}
         {hasSwarm ? (
-          <text className="row-label" x={16} y={height * 0.14}>
+          <text className="row-label" x={14} y={28}>
             Main team
           </text>
         ) : null}
         {hasSwarm ? (
-          <text className="row-label" x={16} y={height * 0.64}>
+          <text className="row-label" x={14} y={coreY + 88}>
             Swarm cores
           </text>
         ) : null}
       </svg>
       <div className="swarm-legend quiet">
-        <span className="leg team">Team wire</span>
-        <span className="leg handoff">Review handoff</span>
-        <span className="leg assist">Swarm assist</span>
-        <span className="leg active">Live job</span>
+        <span className="leg team">Team rail</span>
+        <span className="leg handoff">Review rail</span>
+        <span className="leg assist">Assist trunk</span>
+        <span className="leg active">Live flow</span>
       </div>
     </section>
   );

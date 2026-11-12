@@ -286,30 +286,32 @@ export default function SettingsPage() {
               placeholder={board?.cloud_key_set ? "•••••••• (blank keeps current)" : "Paste from your account"}
             />
           </label>
-          <div className="actions">
-            {(board?.scale_bands ?? []).map((band) => (
-              <button
-                key={band.id}
-                className={
-                  teamSize === band.team && slots === band.slots ? "" : "ghost"
-                }
-                type="button"
-                onClick={() => {
-                  setTeamSize(band.team);
-                  setSlots(band.slots);
-                }}
-              >
-                {band.label}
-              </button>
-            ))}
-          </div>
-          <p className="quiet">
-            {(board?.scale_bands ?? []).find((band) => band.team === teamSize && band.slots === slots)?.fit
-              || board?.shape_hint
-              || "Team = core three. Swarm = more teammates. Project = widest jobs."}
-          </p>
 
-          <h3 className="shape-title">Scale shape</h3>
+          <div className="scale-shape-block">
+            <h3 className="shape-title">Scale shape</h3>
+            <div className="band-row">
+              {(board?.scale_bands ?? []).map((band) => (
+                <button
+                  key={band.id}
+                  className={
+                    teamSize === band.team && slots === band.slots ? "band-btn" : "band-btn ghost"
+                  }
+                  type="button"
+                  onClick={() => {
+                    setTeamSize(band.team);
+                    setSlots(band.slots);
+                  }}
+                >
+                  {band.label}
+                </button>
+              ))}
+            </div>
+            <p className="quiet">
+              {(board?.scale_bands ?? []).find((band) => band.team === teamSize && band.slots === slots)?.fit
+                || board?.shape_hint
+                || "Team = core three. Swarm = more teammates. Project = widest jobs."}
+            </p>
+          </div>
           {staleHub ? (
             <p className="banner">
               This hub still reports a job cap of {board?.slot_max}. Restart the API on your PC so jobs can go to {slotMax}.
