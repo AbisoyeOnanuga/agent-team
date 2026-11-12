@@ -2,7 +2,7 @@
 
 import { CSSProperties, FormEvent, useEffect, useState } from "react";
 import { hub, hubDetail } from "../hub/client";
-import type { AgentCard, Board, TaskCard } from "../hub/types";
+import type { AgentCard, Board, CollabLink, TaskCard } from "../hub/types";
 import { FilePicker } from "./file-picker";
 
 type PixelKind = "idle" | "work" | "hold" | "dry";
@@ -26,7 +26,7 @@ function agentState(agent: AgentCard, board: Board | null): PixelKind {
 function PixelState({ state }: { state: PixelKind }) {
   return (
     <div className="pixel-wrap">
-      <div className={`pixel state-pulse`} data-state={state} aria-hidden="true">
+      <div className="pixel state-pulse" data-state={state} aria-hidden="true">
         {Array.from({ length: 25 }, (_, index) => (
           <i key={index} />
         ))}
@@ -36,43 +36,109 @@ function PixelState({ state }: { state: PixelKind }) {
   );
 }
 
-function laneBlurb(board: Board | null): string {
+function statusLine(board: Board | null): string {
   if (!board) return "";
-  const plan = board.plan || "free";
-  const busy = board.busy_lanes?.length ?? 0;
+  const jobs = board.busy_lanes?.length ?? 0;
   const slots = board.scale_slots ?? 2;
-  if (plan === "scale") {
-    const band = board.scale_band?.label || "Scale";
-    const local = board.local_ready ? "local on" : "local off";
-    return `${band} · ${busy} of ${slots} jobs running · ${board.scale_cloud || "cloud"} · ${local}`;
+  const team = board.team_size ?? board.agents.length;
+  if (board.plan === "scale") {
+    return `${board.scale_band?.label || "Scale"} · ${team} teammates · ${jobs}/${slots} jobs · ${board.scale_cloud || "cloud"}`;
   }
   const first = board.provider === "ollama" ? `local ${board.ollama_model}` : "Gemini";
-  return `Free · up to 2 jobs · starts with ${first}`;
+  return `Free · ${team} teammates · ${jobs}/2 jobs · ${first}`;
 }
 
-function LaneBoard({
+function nodePoint(index: number, total: number, size: number) {
+  const angle = (Math.PI * 2 * index) / Math.max(total, 1) - Math.PI / 2;
+  const radius = size * 0.34;
+  return { x: size / 2 + Math.cos(angle) * radius, y: size / 2 + Math.sin(angle) * radius };
+}
+
+function SwarmMap({
+  agents,
+  links,
   board,
-  busy,
-  slots,
 }: {
+  agents: AgentCard[];
+  links: CollabLink[];
   board: Board | null;
-  busy: string[];
-  slots: number;
 }) {
-  const plan = board?.plan || "free";
+  const size = 300;
+  const points = agents.map((_, index) => nodePoint(index, agents.length, size));
+  const byId = Object.fromEntries(agents.map((agent, index) => [agent.agent_id, points[index]]));
+  const working = agents.filter((agent) => agentState(agent, board) === "work").length;
+
+  return (
+    <section className="compute-unit swarm-map" aria-label="Team compute unit">
+      <div className="unit-head">
+        <span className="eyebrow">Team unit</span>
+        <span className="unit-readout">
+          <i className={working ? "led on" : "led"} />
+          {agents.length} cores · {working} lit
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${size} ${size}`} className="swarm-svg" role="img">
+        <title>Teammate compute mesh</title>
+        <circle className="unit-core" cx={size / 2} cy={size / 2} r="28" />
+        <circle className="unit-core-ring" cx={size / 2} cy={size / 2} r="36" />
+        <text className="unit-core-label" x={size / 2} y={size / 2 + 4} textAnchor="middle">
+          BUS
+        </text>
+        {links.map((link, linkIndex) => {
+          const a = byId[link.from];
+          const b = byId[link.to];
+          if (!a || !b) return null;
+          const pathId = `wire-${link.from}-${link.to}`;
+          const d = `M ${a.x} ${a.y} Q ${size / 2} ${size / 2} ${b.x} ${b.y}`;
+          return (
+            <g key={pathId}>
+              <path id={pathId} className={`swarm-link ${link.kind} ${link.privacy}`} d={d} />
+              <circle className={`electron ${link.kind}`} r="2.4">
+                <animateMotion dur={`${1.6 + (linkIndex % 3) * 0.35}s`} repeatCount="indefinite" path={d} />
+              </circle>
+            </g>
+          );
+        })}
+        {agents.map((agent, index) => {
+          const point = points[index];
+          const state = agentState(agent, board);
+          return (
+            <g key={agent.agent_id} className={`swarm-node ${state}`} transform={`translate(${point.x} ${point.y})`}>
+              <circle className="node-glow" r="22" />
+              <circle className="node-body" r="16" />
+              <circle className="node-led" cx="10" cy="-10" r="2.5" />
+              <text textAnchor="middle" dy="4">
+                {agent.name.slice(0, 6)}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      <div className="swarm-legend quiet">
+        <span className="leg active">Data flow</span>
+        <span className="leg handoff">Review handoff</span>
+        <span className="leg share">Shared project</span>
+      </div>
+    </section>
+  );
+}
+
+function LaneBoard({ busy, slots }: { busy: string[]; slots: number }) {
   const show = Math.min(Math.max(slots, 2), 24);
   const fill = busy.length;
   const pct = Math.round((fill / show) * 100);
   return (
-    <section className="lane-board" aria-label="Job capacity">
+    <section className="compute-unit lane-board" aria-label="Job rack">
       <div className="lane-top">
-        <span className="eyebrow">{plan === "scale" ? board?.scale_band?.label || "Scale" : "Free"}</span>
+        <span className="eyebrow">Job rack</span>
         <span className="lane-count">
-          <strong>{fill}</strong>/{show}
+          <i className={fill ? "led on blink" : "led"} />
+          <strong>{fill}</strong>/{show} slots
         </span>
       </div>
       <div className="lane-meter" aria-hidden="true">
         <i style={{ width: `${pct}%` }} />
+        <span className="electron-sweep" />
       </div>
       <div
         className="lane-grid"
@@ -85,8 +151,10 @@ function LaneBoard({
             <span
               key={index}
               className={live ? (local ? "lane-cell local" : "lane-cell live") : "lane-cell"}
-              title={live ? busy[index] || "busy" : "open"}
-            />
+              style={{ animationDelay: `${(index % 8) * 0.08}s` }}
+            >
+              <i className="slot-led" />
+            </span>
           );
         })}
       </div>
@@ -126,7 +194,11 @@ export default function BoardPage() {
   async function load() {
     const response = await hub("/api/board");
     if (!response.ok) return;
-    setBoard((await response.json()) as Board);
+    const next = (await response.json()) as Board;
+    setBoard(next);
+    if (!next.agents.some((agent) => agent.agent_id === agentId) && next.agents[0]) {
+      setAgentId(next.agents[0].agent_id);
+    }
   }
 
   useEffect(() => {
@@ -174,6 +246,7 @@ export default function BoardPage() {
   const holds = board?.pending_approvals.length ?? 0;
   const slots = board?.scale_slots ?? 2;
   const busyLanes = board?.busy_lanes ?? [];
+  const agents = board?.agents ?? [];
   const openTasks = (board?.tasks ?? []).filter((task) =>
     ["TODO", "IN_PROGRESS", "REVIEW"].includes(task.status),
   );
@@ -184,18 +257,22 @@ export default function BoardPage() {
         <div>
           <p className="eyebrow">Your coding crew</p>
           <h1>Home</h1>
-          <p className="quiet">Send a job. Watch them work. Step in when they ask.</p>
+          <p className="quiet">The crew is a compute unit: cores talk, jobs light up, privacy stays on this PC.</p>
         </div>
         <span className={holds ? "pill hold pulse-pill" : "pill"}>{holds} waiting</span>
       </header>
-      <LaneBoard board={board} busy={busyLanes} slots={slots} />
-      <p className="quiet lane-line">{laneBlurb(board)}</p>
+
+      <SwarmMap agents={agents} links={board?.links ?? []} board={board} />
+      <LaneBoard busy={busyLanes} slots={slots} />
+      <p className="quiet lane-line">{statusLine(board)}</p>
       {board?.cost_hint ? <p className="quiet cost-hint">{board.cost_hint}</p> : null}
+      {board?.privacy_hint ? <p className="quiet">{board.privacy_hint}</p> : null}
       {board?.model_offline ? (
-        <p className="banner">No model is ready. In Setup, add a Gemini key or start local Ollama. You can still queue practice jobs.</p>
+        <p className="banner">No model is ready. In Setup, add a cloud key or start local Ollama.</p>
       ) : null}
+
       <section className="agent-rail" aria-label="Teammates">
-        {(board?.agents ?? []).map((agent) => {
+        {agents.map((agent) => {
           const state = agentState(agent, board);
           return (
             <article className={`card agent agent-${state}`} key={agent.agent_id}>
@@ -209,16 +286,18 @@ export default function BoardPage() {
           );
         })}
       </section>
+
       {openTasks.length ? (
         <section className="job-rail" aria-label="Open jobs">
           <p className="eyebrow">Open jobs</p>
           <div className="job-scroll">
             {openTasks.map((task) => (
-              <JobChip key={task.id} task={task} agents={board?.agents ?? []} />
+              <JobChip key={task.id} task={task} agents={agents} />
             ))}
           </div>
         </section>
       ) : null}
+
       <form className="card stack" onSubmit={assign}>
         <h2>New job</h2>
         <label className="field">
@@ -238,13 +317,13 @@ export default function BoardPage() {
               setAgentId(next);
               setFiles([]);
               if (next === agent2) {
-                const other = (board?.agents ?? []).find((agent) => agent.agent_id !== next);
+                const other = agents.find((agent) => agent.agent_id !== next);
                 if (other) setAgent2(other.agent_id);
                 setFiles2([]);
               }
             }}
           >
-            {(board?.agents ?? []).map((agent) => (
+            {agents.map((agent) => (
               <option key={agent.agent_id} value={agent.agent_id}>
                 {agent.name}
               </option>
@@ -274,7 +353,7 @@ export default function BoardPage() {
                   setFiles2([]);
                 }}
               >
-                {(board?.agents ?? [])
+                {agents
                   .filter((agent) => agent.agent_id !== agentId)
                   .map((agent) => (
                     <option key={agent.agent_id} value={agent.agent_id}>

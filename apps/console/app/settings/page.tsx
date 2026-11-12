@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import { hub, hubDetail } from "../../hub/client";
 import type { Board } from "../../hub/types";
 
-const FOLDERS: Record<string, { job: string; example: string }> = {
-  "agent-ui": { job: "Screens and buttons.", example: "…\\project\\src" },
-  "agent-api": { job: "Server and data.", example: "…\\project\\server" },
-  "agent-review": { job: "Check what just changed.", example: "…\\project\\src" },
+const FOLDERS: Record<string, { job: string }> = {
+  "agent-ui": { job: "Screens and buttons." },
+  "agent-api": { job: "Server and data." },
+  "agent-review": { job: "Check what just changed." },
 };
 
 const TOGGLES = [
@@ -28,11 +28,18 @@ export default function SettingsPage() {
   const [board, setBoard] = useState<Board | null>(null);
   const [paths, setPaths] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
+  const [toastOk, setToastOk] = useState(true);
   const [browseId, setBrowseId] = useState("");
   const [listing, setListing] = useState<{ path: string; parent: string; dirs: string[] } | null>(null);
   const [browseError, setBrowseError] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [slots, setSlots] = useState(4);
+  const [teamSize, setTeamSize] = useState(3);
+
+  function flash(text: string, ok = true) {
+    setToastOk(ok);
+    setMessage(text);
+  }
 
   async function load() {
     const response = await hub("/api/board");
@@ -41,43 +48,56 @@ export default function SettingsPage() {
     setBoard(next);
     setPaths(Object.fromEntries(next.agents.map((agent) => [agent.agent_id, agent.repo_path || ""])));
     setSlots(next.scale_slots || 4);
+    setTeamSize(next.team_size || 3);
   }
 
   useEffect(() => {
     void load();
   }, []);
 
+  useEffect(() => {
+    if (!message) return;
+    const timer = window.setTimeout(() => setMessage(""), 4200);
+    return () => window.clearTimeout(timer);
+  }, [message]);
+
   async function putPlan(body: Record<string, unknown>) {
     setMessage("");
     const response = await hub("/api/plan", { method: "PUT", body: JSON.stringify(body) });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
-      setMessage(hubDetail(data, "Could not save that setting."));
+      flash(hubDetail(data, "Could not save that setting."), false);
       return;
     }
     setApiKey("");
-    setMessage("Saved.");
     await load();
+    if (body.scale_slots != null || body.team_size != null) {
+      flash(`Saved · ${body.team_size ?? teamSize} teammates · ${body.scale_slots ?? slots} jobs`);
+    } else {
+      flash("Saved");
+    }
   }
 
   async function chooseModel(provider: string) {
     setMessage("");
     const response = await hub("/api/model", { method: "PUT", body: JSON.stringify({ provider }) });
     if (!response.ok) {
-      setMessage("Could not switch the Free model.");
+      flash("Could not switch the Free model.", false);
       return;
     }
     await load();
+    flash("Model updated");
   }
 
   async function preset(name: string) {
     setMessage("");
     const response = await hub("/api/policy", { method: "PUT", body: JSON.stringify({ preset: name }) });
     if (!response.ok) {
-      setMessage("Could not save that safety level.");
+      flash("Could not save that safety level.", false);
       return;
     }
     await load();
+    flash(`Safety · ${name}`);
   }
 
   async function toggle(action: string, mode: string) {
@@ -87,10 +107,11 @@ export default function SettingsPage() {
       body: JSON.stringify({ action_class: action, mode: next }),
     });
     if (!response.ok) {
-      setMessage("Push and secret files stay locked.");
+      flash("Push and secret files stay locked.", false);
       return;
     }
     await load();
+    flash("Permission updated");
   }
 
   async function savePaths(event: FormEvent) {
@@ -104,12 +125,12 @@ export default function SettingsPage() {
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        setMessage(hubDetail(body, "Could not save a folder."));
+        flash(hubDetail(body, "Could not save a folder."), false);
         return;
       }
     }
-    setMessage("Folders saved.");
     await load();
+    flash("Folders saved");
   }
 
   async function loadDirs(path: string) {
@@ -151,10 +172,15 @@ export default function SettingsPage() {
 
   return (
     <main className="stack">
+      {message ? (
+        <div className={toastOk ? "toast ok" : "toast bad"} role="status">
+          {message}
+        </div>
+      ) : null}
       <p className="eyebrow">Your computer</p>
       <h1>Setup</h1>
       <p className="quiet">
-        Free is three teammates and two jobs at once. Scale opens more jobs on a cloud key you already own.
+        Free is 3 teammates and 2 jobs at once. Scale lets you add teammates and open more jobs on a key you already pay for.
         Keys never leave this PC.
       </p>
       {board?.cost_hint ? <p className="quiet">{board.cost_hint}</p> : null}
@@ -171,7 +197,7 @@ export default function SettingsPage() {
         </div>
         <p className="quiet">
           {plan === "scale"
-            ? "More jobs at once. One cloud account. Local model still available for private work."
+            ? "Add teammates and parallel jobs. One cloud account. Local model still covers private work."
             : "Everyday: Gemini + local Ollama. Lowest spend."}
         </p>
       </section>
@@ -208,7 +234,9 @@ export default function SettingsPage() {
       ) : (
         <section className="card stack">
           <h2>Cloud account</h2>
-          <p className="quiet">Pick one place to pay. OpenRouter fits most people who want many models under one key.</p>
+          <p className="quiet">
+            Pick one hub with enough rate limits for your width. OpenRouter, Together, and Fireworks are built for many jobs at once.
+          </p>
           <div className="provider-grid">
             {(board?.scale_catalog ?? []).map((item) => (
               <button
@@ -238,31 +266,37 @@ export default function SettingsPage() {
               placeholder={board?.cloud_key_set ? "•••••••• (blank keeps current)" : "Paste from your account"}
             />
           </label>
-          <h3 style={{ margin: 0, fontSize: 18 }}>How wide</h3>
+          <h3 style={{ margin: 0, fontSize: 18 }}>Scale shape</h3>
           <div className="actions">
-            {(board?.scale_bands ?? []).map((band) => {
-              const active =
-                slots <= band.slots &&
-                !(board?.scale_bands ?? []).some((other) => other.slots < band.slots && slots <= other.slots);
-              return (
-                <button
-                  key={band.id}
-                  className={active ? "" : "ghost"}
-                  type="button"
-                  onClick={() => setSlots(band.slots)}
-                >
-                  {band.label} · {band.slots}
-                </button>
-              );
-            })}
+            {(board?.scale_bands ?? []).map((band) => (
+              <button
+                key={band.id}
+                className={board?.scale_band?.id === band.id ? "" : "ghost"}
+                type="button"
+                onClick={() => {
+                  setTeamSize(band.team);
+                  setSlots(band.slots);
+                }}
+              >
+                {band.label}
+              </button>
+            ))}
           </div>
           <p className="quiet">
-            {(board?.scale_bands ?? []).find(
-              (band) =>
-                slots <= band.slots &&
-                !(board?.scale_bands ?? []).some((other) => other.slots < band.slots && slots <= other.slots),
-            )?.fit || "Team for daily work. Swarm or Project when folders are already split."}
+            {(board?.scale_bands ?? []).find((band) => band.id === board?.scale_band?.id)?.fit
+              || "Team = core three. Swarm = more teammates. Project = widest jobs. More is not always better."}
           </p>
+          <label className="field">
+            Teammates · {teamSize}
+            <input
+              type="range"
+              min={3}
+              max={9}
+              step={1}
+              value={teamSize}
+              onChange={(event) => setTeamSize(Number(event.target.value))}
+            />
+          </label>
           <label className="field">
             Jobs at once · {slots}
             <input
@@ -279,13 +313,17 @@ export default function SettingsPage() {
             type="button"
             onClick={() =>
               void putPlan({
+                plan: "scale",
+                team_size: teamSize,
                 scale_slots: slots,
                 ...(apiKey.trim() ? { api_key: apiKey.trim() } : {}),
               })
             }
           >
-            Save Scale
+            Save Scale · {teamSize} teammates · {slots} jobs
           </button>
+          {message && toastOk ? <p className="quiet save-echo">{message}</p> : null}
+          {message && !toastOk ? <p className="error save-echo">{message}</p> : null}
         </section>
       )}
 
@@ -337,7 +375,7 @@ export default function SettingsPage() {
             <div className="folder-row" key={agent.agent_id}>
               <div>
                 <strong>{agent.name}</strong>
-                <div className="quiet">{hint?.job}</div>
+                <div className="quiet">{hint?.job || "Parallel work in its own folder."}</div>
                 <p className="path-chip">{paths[agent.agent_id] || "No folder yet"}</p>
               </div>
               <button className="ghost" type="button" onClick={() => void openBrowse(agent.agent_id)}>
@@ -387,7 +425,6 @@ export default function SettingsPage() {
         </div>
       ) : null}
 
-      {message ? <p className="quiet">{message}</p> : null}
       <button className="ghost wide" type="button" onClick={() => void logout()}>Sign out</button>
     </main>
   );

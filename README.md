@@ -354,22 +354,18 @@ To review every code change on your phone before it is committed, use **Routine*
 
 ## Free and Scale
 
-| Plan | What you get |
-| --- | --- |
-| **Free** | Three teammates (UI, API, Review). Two jobs at once: Gemini and local Ollama. Lowest spend. |
-| **Scale** | Same teammates, wider capacity. One cloud account you already pay for, plus local for private work. |
+Scale is two dials, not one: **teammates** (who works) and **jobs at once** (how many run together). More teammates is not automatically better — only when folders are split.
 
-Scale width (pro-dev style: a few parallel jobs day-to-day; more only when folders are already split):
-
-| Width | Jobs at once | Fit |
+| Plan | Teammates | Jobs at once |
 | --- | --- | --- |
-| **Team** | up to 6 | Daily burst |
-| **Swarm** | up to 12 | Big feature, split folders |
-| **Project** | up to 24 | Large push, partitioned work |
+| **Free** | 3 (UI, API, Review) | 2 (Gemini + local Ollama) |
+| **Scale · Team** | 3 | up to 6 |
+| **Scale · Swarm** | up to 6 | up to 12 |
+| **Scale · Project** | up to 9 | up to 24 |
 
-Spend hint in Setup compares Scale to Free. Cheap hubs (Gemini / OpenRouter) can lower cost per open job; idle lanes still burn quota. Privacy: **Private first**, **Share the load**, or **Cloud first**. Keys stay on this PC (Windows DPAPI when available).
+Large swarms need a high-throughput hub (OpenRouter, Together, Fireworks, Gemini, Mistral, NVIDIA). Anthropic/OpenAI are fine for fewer deep jobs. BYOK: your key stays on this PC. Privacy: **Private first**, **Share the load**, or **Cloud first** — teammates only see locked files; shared notes stay in the project.
 
-Pick Free or Scale in **Setup**. Scale is bring-your-own-key.
+Pick Free or Scale in **Setup**.
 
 ## Models
 

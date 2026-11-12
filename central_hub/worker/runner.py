@@ -30,6 +30,10 @@ ROLE_BRIEFS = {
         "fix breaks inside the locked files. Do not widen the task or rewrite the other role's work."
     ),
 }
+SWARM_BRIEF = (
+    "You are a parallel swarm teammate. Work only inside the locked files for this job. "
+    "Do not touch secrets. Read the shared note for handoffs. Stay in your folder."
+)
 _GIT_LOCKS: dict[str, threading.Lock] = {}
 _GIT_GUARD = threading.Lock()
 
@@ -320,7 +324,7 @@ def _gate(
 def _edit(task: dict, repo: Path, files: list[str], agent_id: str) -> None:
     notes = store.consume_steers(agent_id, task["id"])
     message = (task.get("prompt") or "").strip()
-    brief = ROLE_BRIEFS.get(agent_id, "")
+    brief = ROLE_BRIEFS.get(agent_id) or (SWARM_BRIEF if agent_id.startswith("agent-swarm-") else "")
     custom = store.agent_brief(agent_id)
     if brief or custom:
         parts = [part for part in (brief, custom) if part]

@@ -24,12 +24,15 @@ from central_hub.api.policy import ACTION_CLASSES, PRESETS, preset_rows
 from central_hub.api.scale import (
     BANDS,
     FREE_SLOTS,
+    FREE_TEAM,
     PRIVACY_MODES,
     SCALE_PROVIDERS,
     SCALE_SLOT_MAX,
+    TEAM_MAX,
     band_for,
     catalog as scale_catalog,
     cost_blurb,
+    swarm_extra,
 )
 
 AGENTS = (
@@ -222,7 +225,7 @@ def init_db() -> None:
         cursor.execute(
             "INSERT INTO policy (action_class, mode) VALUES ('__preset__', 'routine')"
         )
-    for agent in AGENTS:
+    for agent in all_possible_agents():
         cursor.execute(
             """
             INSERT INTO projects (agent_id, name, role, repo_path)
@@ -241,6 +244,29 @@ def init_db() -> None:
         )
     conn.commit()
     conn.close()
+
+
+def all_possible_agents() -> list[dict[str, str]]:
+    extras = [swarm_extra(i) for i in range(1, TEAM_MAX - FREE_TEAM + 1)]
+    return [*AGENTS, *extras]
+
+
+def team_size() -> int:
+    if plan_mode() != "scale":
+        return FREE_TEAM
+    try:
+        size = int(_setting("team_size", str(FREE_TEAM)))
+    except ValueError:
+        size = FREE_TEAM
+    return max(FREE_TEAM, min(TEAM_MAX, size))
+
+
+def team_roster() -> list[dict[str, str]]:
+    return all_possible_agents()[: team_size()]
+
+
+def known_agent_ids() -> set[str]:
+    return {agent["agent_id"] for agent in team_roster()}
 
 
 def is_secret_path(rel: str) -> bool:
@@ -366,9 +392,8 @@ def create_task(
     files: Optional[list[str]] = None,
     repo_path: Optional[str] = None,
 ) -> dict[str, Any]:
-    known = {agent["agent_id"] for agent in AGENTS}
-    if agent_id not in known:
-        return {"success": False, "error": "Unknown agent"}
+    if agent_id not in known_agent_ids():
+        return {"success": False, "error": "Unknown teammate"}
     picked = [rel.strip().replace("\\", "/").strip("/") for rel in (files or []) if rel.strip()]
     clean_files = list(dict.fromkeys(picked)) or [_role_note(agent_id)]
     if len(clean_files) > 12:
@@ -821,17 +846,18 @@ def get_project(agent_id: str) -> Optional[dict[str, Any]]:
 
 def list_projects() -> list[dict[str, Any]]:
     conn = connect()
-    rows = conn.execute("SELECT * FROM projects ORDER BY name").fetchall()
+    rows = conn.execute("SELECT * FROM projects").fetchall()
     conn.close()
-    return [
-        {
+    by_id = {
+        row["agent_id"]: {
             "agent_id": row["agent_id"],
             "name": row["name"],
             "role": row["role"],
             "repo_path": row["repo_path"],
         }
         for row in rows
-    ]
+    }
+    return [by_id[agent["agent_id"]] for agent in team_roster() if agent["agent_id"] in by_id]
 
 
 def set_project_path(agent_id: str, repo_path: str) -> dict[str, Any]:
@@ -1388,19 +1414,24 @@ def board_snapshot() -> dict[str, Any]:
         "plan": plan_mode(),
         "privacy": privacy_mode(),
         "privacy_hint": PRIVACY_MODES[privacy_mode()],
+        "team_size": team_size(),
+        "team_max": TEAM_MAX,
         "scale_cloud": cloud,
         "scale_slots": max_lanes(),
-        "scale_band": band_for(max_lanes()) if plan_mode() == "scale" else None,
+        "scale_band": (
+            band_for(team_size(), max_lanes()) if plan_mode() == "scale" else None
+        ),
         "scale_bands": BANDS,
         "scale_catalog": scale_catalog(),
         "cost_hint": (
-            cost_blurb(max_lanes(), cloud, privacy_mode())
+            cost_blurb(team_size(), max_lanes(), cloud, privacy_mode())
             if plan_mode() == "scale"
-            else "Free: two jobs at once. Lowest spend for everyday work."
+            else "Free: 3 teammates, 2 jobs at once. Lowest spend for everyday work."
         ),
         "cloud_key_set": _key_ready(cloud_meta["key_env"]),
         "local_ready": lane_ready("ollama"),
         "busy_lanes": _busy_lanes(),
+        "links": collaboration_links(),
     }
 
 
@@ -1411,6 +1442,34 @@ def _busy_lanes() -> list[str]:
     ).fetchall()
     conn.close()
     return [row["provider"] for row in rows if row["provider"]]
+
+
+def collaboration_links() -> list[dict[str, str]]:
+    """Edges between active teammates for the Home swarm map."""
+    privacy = privacy_mode()
+    projects = {p["agent_id"]: p for p in list_projects()}
+    open_tasks = [
+        t
+        for t in list_tasks()
+        if t["status"] in ("TODO", "IN_PROGRESS", "REVIEW") and t.get("assigned_agent")
+    ]
+    by_agent: dict[str, list[dict[str, Any]]] = {}
+    for task in open_tasks:
+        by_agent.setdefault(task["assigned_agent"], []).append(task)
+    ids = [p["agent_id"] for p in list_projects()]
+    links: list[dict[str, str]] = []
+    for i, left in enumerate(ids):
+        for right in ids[i + 1 :]:
+            a, b = projects[left], projects[right]
+            active = left in by_agent and right in by_agent
+            same_root = bool(a.get("repo_path") and a.get("repo_path") == b.get("repo_path"))
+            handoff = left == "agent-review" or right == "agent-review"
+            if not (active or same_root or handoff):
+                continue
+            kind = "handoff" if handoff else ("active" if active else "share")
+            lane = "local" if privacy == "local_first" else ("cloud" if privacy == "cloud_ok" else "mixed")
+            links.append({"from": left, "to": right, "kind": kind, "privacy": lane})
+    return links
 
 
 def _agent_tool(agent_id: str) -> str:
@@ -1464,7 +1523,7 @@ def agent_briefs() -> dict[str, str]:
     ).fetchall()
     conn.close()
     stored = {row["key"].split(":", 1)[1]: row["value"] for row in rows}
-    return {agent["agent_id"]: stored.get(agent["agent_id"], "") for agent in AGENTS}
+    return {agent["agent_id"]: stored.get(agent["agent_id"], "") for agent in team_roster()}
 
 
 def agent_brief(agent_id: str) -> str:
@@ -1472,9 +1531,8 @@ def agent_brief(agent_id: str) -> str:
 
 
 def set_agent_brief(agent_id: str, brief: str) -> dict[str, Any]:
-    known = {agent["agent_id"] for agent in AGENTS}
-    if agent_id not in known:
-        return {"success": False, "error": "Unknown role"}
+    if agent_id not in known_agent_ids():
+        return {"success": False, "error": "Unknown teammate"}
     text = brief.strip()
     if len(text) > 4000:
         return {"success": False, "error": "Keep the brief under 4000 characters"}
@@ -1523,6 +1581,13 @@ def set_scale_slots(slots: int) -> dict[str, Any]:
     value = max(FREE_SLOTS, min(SCALE_SLOT_MAX, int(slots)))
     _set_setting("scale_slots", str(value))
     return {"success": True, "scale_slots": value}
+
+
+def set_team_size(size: int) -> dict[str, Any]:
+    value = max(FREE_TEAM, min(TEAM_MAX, int(size)))
+    _set_setting("team_size", str(value))
+    init_db()
+    return {"success": True, "team_size": value}
 
 
 def set_cloud_key(provider: str, key: str) -> dict[str, Any]:

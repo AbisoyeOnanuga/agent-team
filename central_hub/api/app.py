@@ -67,6 +67,7 @@ class PlanBody(BaseModel):
     privacy: Optional[str] = None
     scale_cloud: Optional[str] = None
     scale_slots: Optional[int] = Field(default=None, ge=2, le=24)
+    team_size: Optional[int] = Field(default=None, ge=3, le=9)
     # Empty string means "keep current key"; only validate when a real key is sent.
     api_key: Optional[str] = Field(default=None, max_length=512)
 
@@ -262,6 +263,8 @@ def write_plan(request: Request, body: PlanBody) -> dict[str, Any]:
         out.update(result)
     if body.scale_slots is not None:
         out.update(store.set_scale_slots(body.scale_slots))
+    if body.team_size is not None:
+        out.update(store.set_team_size(body.team_size))
     key = (body.api_key or "").strip()
     if key:
         cloud = body.scale_cloud or store.scale_cloud()

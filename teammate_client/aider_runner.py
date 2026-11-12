@@ -62,6 +62,18 @@ PROVIDER_CONFIGS = {
         "api_key_env": "NVIDIA_API_KEY",
         "desc": "NVIDIA NIM"
     },
+    "together": {
+        "model": "openai/meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
+        "api_base": "https://api.together.xyz/v1",
+        "api_key_env": "TOGETHER_API_KEY",
+        "desc": "Together AI high throughput"
+    },
+    "fireworks": {
+        "model": "openai/accounts/fireworks/models/llama-v3p3-70b-instruct",
+        "api_base": "https://api.fireworks.ai/inference/v1",
+        "api_key_env": "FIREWORKS_API_KEY",
+        "desc": "Fireworks fast inference"
+    },
     "ollama": {
         "model": "ollama/gemma3:4b",
         "api_base": "http://127.0.0.1:11434/v1",

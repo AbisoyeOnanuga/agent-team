@@ -1,31 +1,34 @@
-"""Free vs Scale plan, privacy mode, BYOK cloud hub, and cost-aware capacity."""
+"""Free vs Scale: team size, parallel jobs, BYOK hubs, cost hints."""
 
 from __future__ import annotations
 
 from typing import Any
 
-# One cloud hub for Scale. OpenRouter consolidates many models under one key.
-SCALE_PROVIDERS: dict[str, dict[str, str]] = {
+# High-concurrency hubs first. One account scales many simultaneous jobs.
+SCALE_PROVIDERS: dict[str, dict[str, str | float]] = {
     "openrouter": {
         "label": "OpenRouter",
-        "why": "One bill, many models. Best when you grow lanes.",
+        "why": "One key, many models, strong concurrency for large swarms.",
         "key_env": "OPENROUTER_API_KEY",
         "site": "https://openrouter.ai/keys",
         "cost_index": 1.0,
+        "throughput": "high",
     },
-    "openai": {
-        "label": "OpenAI",
-        "why": "Solid everyday coding if you already pay here.",
-        "key_env": "OPENAI_API_KEY",
-        "site": "https://platform.openai.com/api-keys",
-        "cost_index": 1.4,
+    "together": {
+        "label": "Together AI",
+        "why": "Built for high-throughput inference. Good when many jobs run at once.",
+        "key_env": "TOGETHER_API_KEY",
+        "site": "https://api.together.xyz/settings/api-keys",
+        "cost_index": 0.85,
+        "throughput": "high",
     },
-    "anthropic": {
-        "label": "Anthropic",
-        "why": "Careful edits and long context. Higher per job.",
-        "key_env": "ANTHROPIC_API_KEY",
-        "site": "https://console.anthropic.com/",
-        "cost_index": 1.6,
+    "fireworks": {
+        "label": "Fireworks",
+        "why": "Fast hosted open models. Strong for bursty parallel work.",
+        "key_env": "FIREWORKS_API_KEY",
+        "site": "https://fireworks.ai/account/api-keys",
+        "cost_index": 0.9,
+        "throughput": "high",
     },
     "gemini": {
         "label": "Google Gemini",
@@ -33,13 +36,31 @@ SCALE_PROVIDERS: dict[str, dict[str, str]] = {
         "key_env": "GEMINI_API_KEY",
         "site": "https://aistudio.google.com/app/apikey",
         "cost_index": 0.7,
+        "throughput": "high",
+    },
+    "openai": {
+        "label": "OpenAI",
+        "why": "Solid coding. Watch rate limits when jobs go wide.",
+        "key_env": "OPENAI_API_KEY",
+        "site": "https://platform.openai.com/api-keys",
+        "cost_index": 1.4,
+        "throughput": "medium",
+    },
+    "anthropic": {
+        "label": "Anthropic",
+        "why": "Careful edits. Better for fewer deep jobs than huge swarms.",
+        "key_env": "ANTHROPIC_API_KEY",
+        "site": "https://console.anthropic.com/",
+        "cost_index": 1.6,
+        "throughput": "medium",
     },
     "mistral": {
         "label": "Mistral",
-        "why": "Codestral for code. Often mid-priced.",
+        "why": "Codestral for code. Mid price, solid concurrency.",
         "key_env": "MISTRAL_API_KEY",
         "site": "https://console.mistral.ai/api-keys",
         "cost_index": 0.9,
+        "throughput": "high",
     },
     "nvidia": {
         "label": "NVIDIA NIM",
@@ -47,41 +68,43 @@ SCALE_PROVIDERS: dict[str, dict[str, str]] = {
         "key_env": "NVIDIA_API_KEY",
         "site": "https://build.nvidia.com/",
         "cost_index": 1.1,
+        "throughput": "high",
     },
 }
 
 PRIVACY_MODES = {
-    "local_first": "Private files prefer your PC. Cloud only fills in when Scale is on.",
-    "balanced": "Your chosen brain goes first. Local and cloud share the work.",
-    "cloud_ok": "Cloud goes first for speed. Still keep secrets out of locked files.",
+    "local_first": "Private folders prefer your PC. Cloud teammates only see what you lock for them.",
+    "balanced": "Local and cloud share work. Shared notes stay in the project, not with the vendor.",
+    "cloud_ok": "Cloud goes first for speed. Secrets still never leave locked files.",
 }
 
-# Pro-dev practice: 3–4 parallel is common; large projects partition work across more.
+FREE_TEAM = 3
+TEAM_MAX = 9
 FREE_SLOTS = 2
-TEAM_SLOTS = 6
-SWARM_SLOTS = 12
-PROJECT_SLOTS = 24
-SCALE_SLOT_MAX = PROJECT_SLOTS
+SCALE_SLOT_MAX = 24
 
-# Relative spend vs Free (2 lanes). More lanes = more spend; cheap hubs lower cost/teammate.
+# Presets: teammates × jobs. More teammates ≠ always better — user chooses.
 BANDS: list[dict[str, Any]] = [
     {
         "id": "team",
         "label": "Team",
-        "slots": TEAM_SLOTS,
-        "fit": "Day-to-day. About as wide as Free, with room to burst.",
+        "team": 3,
+        "slots": 6,
+        "fit": "Core three. Extra parallel jobs when two areas move at once.",
     },
     {
         "id": "swarm",
         "label": "Swarm",
-        "slots": SWARM_SLOTS,
-        "fit": "Big feature. Split folders so jobs do not collide.",
+        "team": 6,
+        "slots": 12,
+        "fit": "Add teammates that work side by side. Split folders; keep privacy on.",
     },
     {
         "id": "project",
         "label": "Project",
-        "slots": PROJECT_SLOTS,
-        "fit": "Large push. Best when work is already split across folders.",
+        "team": 9,
+        "slots": 24,
+        "fit": "Large push. Needs a high-throughput hub and clearly split work.",
     },
 ]
 
@@ -94,25 +117,23 @@ def catalog() -> list[dict[str, Any]]:
             "why": meta["why"],
             "site": meta["site"],
             "cost_index": meta["cost_index"],
+            "throughput": meta["throughput"],
         }
         for key, meta in SCALE_PROVIDERS.items()
     ]
 
 
-def band_for(slots: int) -> dict[str, Any]:
-    for band in BANDS:
-        if slots <= band["slots"]:
-            return band
-    return BANDS[-1]
+def band_for(team: int, slots: int) -> dict[str, Any]:
+    score = lambda b: abs(b["team"] - team) + abs(b["slots"] - slots) * 0.25
+    return min(BANDS, key=score)
 
 
-def cost_blurb(slots: int, cloud: str, privacy: str) -> str:
-    """Rough relative spend vs Free (2 lanes). Not a price quote."""
+def cost_blurb(team: int, slots: int, cloud: str, privacy: str) -> str:
     meta = SCALE_PROVIDERS.get(cloud) or SCALE_PROVIDERS["openrouter"]
     index = float(meta["cost_index"])
     local_cut = 0.65 if privacy == "local_first" else (0.85 if privacy == "balanced" else 1.0)
     relative = (slots / FREE_SLOTS) * index * local_cut
-    per = relative / max(slots, 1)
+    per_job = relative / max(slots, 1)
     free_per = 1.0 / FREE_SLOTS
     if relative <= 1.2:
         spend = "near Free spend"
@@ -120,10 +141,18 @@ def cost_blurb(slots: int, cloud: str, privacy: str) -> str:
         spend = f"about {relative:.1f}× Free spend"
     else:
         spend = f"about {relative:.0f}× Free spend"
-    better = per < free_per * 0.95
+    mates = f"{team} teammates"
     tip = (
-        "Cost per open job can beat Free when the hub is cheap and work is split."
-        if better
-        else "Keep lanes near the work that is ready; idle lanes still burn quota."
+        "Cost per open job can beat Free on a cheap high-throughput hub."
+        if per_job < free_per * 0.95 and meta["throughput"] == "high"
+        else "More teammates help only when folders are split; idle jobs still burn quota."
     )
-    return f"{spend}. {tip}"
+    return f"{mates}, {slots} jobs at once · {spend}. {tip}"
+
+
+def swarm_extra(index: int) -> dict[str, str]:
+    return {
+        "agent_id": f"agent-swarm-{index}",
+        "name": f"Swarm {index}",
+        "role": "Parallel",
+    }

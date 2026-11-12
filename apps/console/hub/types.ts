@@ -50,13 +50,22 @@ export type ScaleProvider = {
   why: string;
   site: string;
   cost_index?: number;
+  throughput?: string;
 };
 
 export type ScaleBand = {
   id: string;
   label: string;
+  team: number;
   slots: number;
   fit: string;
+};
+
+export type CollabLink = {
+  from: string;
+  to: string;
+  kind: string;
+  privacy: string;
 };
 
 export type Board = {
@@ -72,6 +81,8 @@ export type Board = {
   plan?: "free" | "scale";
   privacy?: "local_first" | "balanced" | "cloud_ok";
   privacy_hint?: string;
+  team_size?: number;
+  team_max?: number;
   scale_cloud?: string;
   scale_slots?: number;
   scale_band?: ScaleBand | null;
@@ -81,4 +92,5 @@ export type Board = {
   cloud_key_set?: boolean;
   local_ready?: boolean;
   busy_lanes?: string[];
+  links?: CollabLink[];
 };
