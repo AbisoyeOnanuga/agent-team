@@ -356,14 +356,15 @@ To review every code change on your phone before it is committed, use **Routine*
 
 Scale is two dials, not one: **teammates** (who works) and **jobs at once** (how many run together). More teammates is not automatically better — only when folders are split.
 
-| Plan | Teammates | Jobs at once |
-| --- | --- | --- |
-| **Free** | 3 (UI, API, Review) | 2 (Gemini + local Ollama) |
-| **Scale · Team** | 3 | up to 6 |
-| **Scale · Swarm** | up to 6 | up to 12 |
-| **Scale · Project** | up to 9 | up to 24 |
+| Plan | Teammates | Jobs at once | Ratio note |
+| --- | --- | --- | --- |
+| **Free** | 3 (UI, API, Review) | 2 | Lowest spend |
+| **Scale · Team** | 3 | 6 | ~2 jobs / mate |
+| **Scale · Swarm** | 6 | 12 | Split folders |
+| **Scale · Project** | 9 | 18 | High-throughput hub |
+| **Scale · Factory** | 12 | 24 | Pro-dev ceiling; past this, splits beat more slots |
 
-Large swarms need a high-throughput hub (OpenRouter, Together, Fireworks, Gemini, Mistral, NVIDIA). Anthropic/OpenAI are fine for fewer deep jobs. BYOK: your key stays on this PC. Privacy: **Private first**, **Share the load**, or **Cloud first** — teammates only see locked files; shared notes stay in the project.
+Sweet spot is about **2 jobs per teammate**. Above ~3×, cost rises with little speed. Restart the hub after pulling so job caps stay at 24 (an old process still returns “≤ 6”).
 
 Pick Free or Scale in **Setup**.
 

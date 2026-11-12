@@ -78,33 +78,44 @@ PRIVACY_MODES = {
     "cloud_ok": "Cloud goes first for speed. Secrets still never leave locked files.",
 }
 
+# Bump when limits change so the phone can detect a stale hub process.
+SCALE_API_REV = 3
+
 FREE_TEAM = 3
-TEAM_MAX = 9
+TEAM_MAX = 12  # core 3 + up to 9 parallel factory mates
 FREE_SLOTS = 2
 SCALE_SLOT_MAX = 24
 
-# Presets: teammates × jobs. More teammates ≠ always better — user chooses.
+# Optimal gain band: ~2 jobs per teammate with split folders.
+# Above ~3 jobs/teammate returns little but burns quota.
 BANDS: list[dict[str, Any]] = [
     {
         "id": "team",
         "label": "Team",
         "team": 3,
         "slots": 6,
-        "fit": "Core three. Extra parallel jobs when two areas move at once.",
+        "fit": "Core three. About 2 jobs each when two areas move at once.",
     },
     {
         "id": "swarm",
         "label": "Swarm",
         "team": 6,
         "slots": 12,
-        "fit": "Add teammates that work side by side. Split folders; keep privacy on.",
+        "fit": "Side-by-side mates. Split folders; keep privacy on.",
     },
     {
         "id": "project",
         "label": "Project",
         "team": 9,
+        "slots": 18,
+        "fit": "Large feature factory. Needs a high-throughput hub.",
+    },
+    {
+        "id": "factory",
+        "label": "Factory",
+        "team": 12,
         "slots": 24,
-        "fit": "Large push. Needs a high-throughput hub and clearly split work.",
+        "fit": "Pro-dev width. Past this, extra jobs rarely beat better folder splits.",
     },
 ]
 

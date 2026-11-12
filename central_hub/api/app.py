@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from central_hub.api.scale import FREE_TEAM, SCALE_API_REV, SCALE_SLOT_MAX, TEAM_MAX
 from central_hub.mcp_server import server as store
 
 COOKIE = "hackswarm_session"
@@ -66,8 +67,9 @@ class PlanBody(BaseModel):
     plan: Optional[str] = None
     privacy: Optional[str] = None
     scale_cloud: Optional[str] = None
-    scale_slots: Optional[int] = Field(default=None, ge=2, le=24)
-    team_size: Optional[int] = Field(default=None, ge=3, le=9)
+    # Single source of truth — must match central_hub.api.scale limits.
+    scale_slots: Optional[int] = Field(default=None, ge=2, le=SCALE_SLOT_MAX)
+    team_size: Optional[int] = Field(default=None, ge=FREE_TEAM, le=TEAM_MAX)
     # Empty string means "keep current key"; only validate when a real key is sent.
     api_key: Optional[str] = Field(default=None, max_length=512)
 

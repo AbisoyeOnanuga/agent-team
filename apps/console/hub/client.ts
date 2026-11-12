@@ -33,7 +33,13 @@ export function hubDetail(body: unknown, fallback = "Something went wrong."): st
       .map((item) => {
         if (typeof item === "string") return item;
         if (item && typeof item === "object" && "msg" in item) {
-          return String((item as { msg: unknown }).msg);
+          const msg = String((item as { msg: unknown }).msg);
+          const loc = (item as { loc?: unknown }).loc;
+          const where = Array.isArray(loc) ? loc.filter((part) => part !== "body").join(".") : "";
+          if (msg.includes("less than or equal to 6") || msg.includes("≤ 6")) {
+            return "Hub is outdated (still caps jobs at 6). Restart the API on your PC, then try again.";
+          }
+          return where ? `${where}: ${msg}` : msg;
         }
         return "";
       })

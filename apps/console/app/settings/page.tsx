@@ -84,12 +84,18 @@ export default function SettingsPage() {
     }
   }
 
+  const teamMax = board?.team_max ?? 12;
+  const slotMax = board?.slot_max ?? 24;
+  // Old hub processes still validate le=6 and omit scale_api_rev / slot_max=24.
+  const staleHub =
+    !!board && ((board.scale_api_rev ?? 0) < 3 || (board.slot_max != null && board.slot_max < 24));
+
   function nudge(kind: "team" | "jobs", delta: number) {
     if (kind === "team") {
-      setTeamSize((current) => Math.max(3, Math.min(9, current + delta)));
+      setTeamSize((current) => Math.max(3, Math.min(teamMax, current + delta)));
       return;
     }
-    setSlots((current) => Math.max(2, Math.min(24, current + delta)));
+    setSlots((current) => Math.max(2, Math.min(slotMax, current + delta)));
   }
 
   async function chooseModel(provider: string) {
@@ -304,13 +310,18 @@ export default function SettingsPage() {
           </p>
 
           <h3 className="shape-title">Scale shape</h3>
+          {staleHub ? (
+            <p className="banner">
+              This hub still reports a job cap of {board?.slot_max}. Restart the API on your PC so jobs can go to {slotMax}.
+            </p>
+          ) : null}
           <p className="quiet">
-            Aim for about 2 jobs per teammate. Saved shape: {board?.configured_team_size ?? "—"} teammates ·{" "}
-            {board?.configured_scale_slots ?? "—"} jobs
+            Best value is about 2 jobs per teammate (up to {teamMax} mates · {slotMax} jobs). Past ~3×, spend rises without much speed.
+            Saved: {board?.configured_team_size ?? "—"} teammates · {board?.configured_scale_slots ?? "—"} jobs
             {plan === "scale" ? " · live now" : " · turn Scale on to go live"}
           </p>
           <label className="field">
-            Teammates · {teamSize}
+            Teammates · {teamSize} / {teamMax}
             <div className="stepper">
               <button className="ghost" type="button" onClick={() => nudge("team", -1)} aria-label="Fewer teammates">
                 −
@@ -318,9 +329,9 @@ export default function SettingsPage() {
               <input
                 type="range"
                 min={3}
-                max={9}
+                max={teamMax}
                 step={1}
-                value={teamSize}
+                value={Math.min(teamSize, teamMax)}
                 onChange={(event) => setTeamSize(Number(event.target.value))}
               />
               <button className="ghost" type="button" onClick={() => nudge("team", 1)} aria-label="More teammates">
@@ -329,7 +340,7 @@ export default function SettingsPage() {
             </div>
           </label>
           <label className="field">
-            Jobs at once · {slots}
+            Jobs at once · {slots} / {slotMax}
             <div className="stepper">
               <button className="ghost" type="button" onClick={() => nudge("jobs", -1)} aria-label="Fewer jobs">
                 −
@@ -337,9 +348,9 @@ export default function SettingsPage() {
               <input
                 type="range"
                 min={2}
-                max={24}
+                max={slotMax}
                 step={1}
-                value={slots}
+                value={Math.min(slots, slotMax)}
                 onChange={(event) => setSlots(Number(event.target.value))}
               />
               <button className="ghost" type="button" onClick={() => nudge("jobs", 1)} aria-label="More jobs">

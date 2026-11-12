@@ -84,6 +84,7 @@ export type Board = {
   team_size?: number;
   team_max?: number;
   slot_max?: number;
+  scale_api_rev?: number;
   configured_team_size?: number;
   configured_scale_slots?: number;
   scale_cloud?: string;

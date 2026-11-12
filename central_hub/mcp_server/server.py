@@ -26,6 +26,7 @@ from central_hub.api.scale import (
     FREE_SLOTS,
     FREE_TEAM,
     PRIVACY_MODES,
+    SCALE_API_REV,
     SCALE_PROVIDERS,
     SCALE_SLOT_MAX,
     TEAM_MAX,
@@ -80,15 +81,15 @@ def init_db() -> None:
     cursor = conn.cursor()
     cursor.execute(
         """
-        CREATE TABLE IF NOT EXISTS tasks (
-            id TEXT PRIMARY KEY,
-            title TEXT NOT NULL,
-            description TEXT,
+    CREATE TABLE IF NOT EXISTS tasks (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        description TEXT,
             status TEXT DEFAULT 'TODO',
-            assigned_agent TEXT,
-            assigned_dev TEXT,
+        assigned_agent TEXT,
+        assigned_dev TEXT,
             locked_files TEXT,
-            created_at TEXT,
+        created_at TEXT,
             updated_at TEXT,
             prompt TEXT,
             repo_path TEXT,
@@ -103,23 +104,23 @@ def init_db() -> None:
 
     cursor.execute(
         """
-        CREATE TABLE IF NOT EXISTS agent_registry (
-            agent_id TEXT PRIMARY KEY,
-            teammate_name TEXT,
+    CREATE TABLE IF NOT EXISTS agent_registry (
+        agent_id TEXT PRIMARY KEY,
+        teammate_name TEXT,
             current_tool TEXT,
-            current_task TEXT,
-            last_heartbeat TEXT
-        )
+        current_task TEXT,
+        last_heartbeat TEXT
+    )
         """
     )
     cursor.execute(
         """
-        CREATE TABLE IF NOT EXISTS contracts (
-            module_name TEXT PRIMARY KEY,
-            author_agent TEXT,
-            schema_definition TEXT,
-            updated_at TEXT
-        )
+    CREATE TABLE IF NOT EXISTS contracts (
+        module_name TEXT PRIMARY KEY,
+        author_agent TEXT,
+        schema_definition TEXT,
+        updated_at TEXT
+    )
         """
     )
     cursor.execute(
@@ -665,7 +666,7 @@ def claim_task(
     stamp = now()
     cursor.execute(
         """
-        UPDATE tasks
+        UPDATE tasks 
         SET status = 'IN_PROGRESS', assigned_agent = ?, assigned_dev = ?,
             locked_files = ?, provider = ?, updated_at = ?
         WHERE id = ? AND status = 'TODO'
@@ -698,7 +699,7 @@ def update_task_status(
     if status == "DONE":
         conn.execute(
             """
-            UPDATE tasks
+            UPDATE tasks 
             SET status = 'DONE', locked_files = '[]', updated_at = ?
             WHERE id = ?
             """,
@@ -718,9 +719,9 @@ def release_task(task_id: str, status: str = "TODO") -> None:
     conn = connect()
     conn.execute(
         """
-        UPDATE tasks
+            UPDATE tasks 
         SET status = ?, locked_files = '[]', updated_at = ?
-        WHERE id = ?
+            WHERE id = ?
         """,
         (status, now(), task_id),
     )
@@ -1429,6 +1430,7 @@ def board_snapshot() -> dict[str, Any]:
         "team_size": team_size(),
         "team_max": TEAM_MAX,
         "slot_max": SCALE_SLOT_MAX,
+        "scale_api_rev": SCALE_API_REV,
         "configured_team_size": configured_team_size(),
         "configured_scale_slots": configured_scale_slots(),
         "scale_cloud": cloud,
