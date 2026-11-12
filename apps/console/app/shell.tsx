@@ -6,11 +6,11 @@ import { usePathname } from "next/navigation";
 import { subscribeHub } from "../hub/client";
 
 const LINKS = [
-  ["/", "Team"],
-  ["/tape", "Log"],
-  ["/gate", "Approve"],
-  ["/steer", "Prompts"],
-  ["/settings", "Access"],
+  ["/", "Home"],
+  ["/tape", "Activity"],
+  ["/gate", "Review"],
+  ["/steer", "Guide"],
+  ["/settings", "Setup"],
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {
@@ -54,7 +54,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       {toggle}
       {down ? (
         <p className="banner">
-          The desk hub is not running. On the PC, start the API, then refresh this page.
+          The computer hub is offline. Start it on your PC, then refresh.
         </p>
       ) : null}
       {children}

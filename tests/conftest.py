@@ -8,10 +8,13 @@ os.environ["CONSOLE_PIN"] = "2468"
 os.environ["HACKSWARM_WORKER"] = "0"
 os.environ["HACKSWARM_PROVIDER"] = "gemini"
 os.environ["NTFY_TOPIC"] = ""
+os.environ["OLLAMA_BASE_URL"] = "http://127.0.0.1:1"
 for _name in (
     "GEMINI_API_KEY",
     "MISTRAL_API_KEY",
     "OPENROUTER_API_KEY",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
     "NVIDIA_API_KEY",
     "GROQ_API_KEY",
 ):

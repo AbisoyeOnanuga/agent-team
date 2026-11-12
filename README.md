@@ -322,11 +322,11 @@ The bottom bar has five pages.
 
 | Page | What you do there |
 | --- | --- |
-| **Team** | See each role's folder and status lamp (Idle, Editing, Waiting, Dry-run). Send a task: choose the role, press **Pick files** to browse inside that role's folder and tick the files to change, or type a new file name and press **Add**. Press **Add a second role** to send a second task to a different role at the same time. Each task needs at least one file, and at most 12. |
-| **Log** | Watch the work as it happens. Newest lines are at the bottom, and lines from one edit are grouped together. |
-| **Approve** | Every action waiting on you, each with its reason, its blast radius, and the diff. Choose **Proceed**, **Revise** with a note, or **Stop**. Two roles can each have something waiting here at the same time. |
-| **Prompts** | Add a standing prompt to each role. It is added after the built-in brief on every task until you change it. |
-| **Access** | Choose the first lane's model, the approval level, and the commit, delete, and install toggles. Use **Browse** to choose each role's folder without typing a path. |
+| **Home** | See each teammate and send a job. Choose files from a phone-friendly sheet. Add a second job when you want two at once. |
+| **Activity** | Live feed of what they are doing. |
+| **Review** | Pause points with the diff. Looks good / Change it / Stop. |
+| **Guide** | Extra standing notes for each teammate. |
+| **Setup** | Free or Scale, privacy, brains, safety level, and folders (Browse sheet, not typing). |
 
 **Stop** parks a task and releases its locks so it does not restart by itself. A failed step marks the task failed for the same reason.
 
@@ -352,9 +352,28 @@ To review every code change on your phone before it is committed, use **Routine*
 
 ---
 
+## Free and Scale
+
+| Plan | What you get |
+| --- | --- |
+| **Free** | Three teammates (UI, API, Review). Two jobs at once: Gemini and local Ollama. Lowest spend. |
+| **Scale** | Same teammates, wider capacity. One cloud account you already pay for, plus local for private work. |
+
+Scale width (pro-dev style: a few parallel jobs day-to-day; more only when folders are already split):
+
+| Width | Jobs at once | Fit |
+| --- | --- | --- |
+| **Team** | up to 6 | Daily burst |
+| **Swarm** | up to 12 | Big feature, split folders |
+| **Project** | up to 24 | Large push, partitioned work |
+
+Spend hint in Setup compares Scale to Free. Cheap hubs (Gemini / OpenRouter) can lower cost per open job; idle lanes still burn quota. Privacy: **Private first**, **Share the load**, or **Cloud first**. Keys stay on this PC (Windows DPAPI when available).
+
+Pick Free or Scale in **Setup**. Scale is bring-your-own-key.
+
 ## Models
 
-A lane is a model, not a role. The roles are the queues. With one model available, the roles take turns on it.
+A lane is a model slot, not a role. The roles are the queues. With one model available, the roles take turns on it.
 
 | Lane setup | What runs |
 | --- | --- |

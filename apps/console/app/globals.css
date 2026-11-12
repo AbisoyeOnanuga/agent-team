@@ -631,6 +631,95 @@ html[data-theme="light"] .error { color: #9d2b18; }
   .pixel i { animation: none; }
 }
 
+.lane-line {
+  margin: -6px 0 4px;
+}
+
+.folder-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.path-chip {
+  margin: 6px 0 0;
+  font-size: 12px;
+  word-break: break-all;
+  color: var(--paper-dim);
+}
+
+.provider-grid {
+  display: grid;
+  gap: 8px;
+}
+
+button.provider {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  min-height: 64px;
+  padding: 12px;
+  background: var(--field);
+  color: var(--paper);
+  border: 1px solid var(--line);
+  font-family: var(--mono);
+  font-weight: 400;
+}
+
+button.provider strong {
+  font-family: var(--display);
+  font-size: 16px;
+}
+
+button.provider span {
+  font-size: 12px;
+  color: var(--paper-dim);
+}
+
+button.provider.picked {
+  border-color: var(--amber);
+  box-shadow: inset 0 0 0 1px var(--amber);
+}
+
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: rgba(0, 0, 0, 0.55);
+  display: grid;
+  align-items: end;
+  animation: sheet-in 180ms ease;
+}
+
+.sheet-panel {
+  display: grid;
+  gap: 10px;
+  max-height: min(78dvh, 640px);
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  background: var(--ink-2);
+  border-top: 1px solid var(--amber);
+  overflow: auto;
+}
+
+.agent-work,
+.agent-hold {
+  border-color: var(--amber);
+}
+
+.agent-hold {
+  border-color: var(--hold);
+}
+
+.pixel.state-pulse[data-state="work"],
+.pixel.state-pulse[data-state="hold"] {
+  animation: state-glow 1.6s ease infinite;
+}
+
+a {
+  color: var(--amber);
+}
+
 .theme-toggle {
   position: fixed;
   top: 12px;
@@ -667,4 +756,18 @@ html[data-theme="light"] .error { color: #9d2b18; }
 @keyframes pixel-chase {
   0%, 45% { opacity: 1; }
   50%, 100% { opacity: 0.15; }
+}
+
+@keyframes sheet-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes state-glow {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.25); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet, .pixel.state-pulse { animation: none; }
 }

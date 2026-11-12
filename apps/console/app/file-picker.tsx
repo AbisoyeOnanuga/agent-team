@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { hub } from "../hub/client";
+import { hub, hubDetail } from "../hub/client";
 
 type Listing = {
   root: string;
@@ -34,7 +34,7 @@ export function FilePicker({
     const response = await hub(`/api/files${query}`);
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
-      setError(body.detail || "Could not list this folder.");
+      setError(hubDetail(body, "Could not open this folder."));
       return;
     }
     setListing(body as Listing);
@@ -55,9 +55,7 @@ export function FilePicker({
   return (
     <div className="field">
       Files to change
-      <span className="quiet">
-        Only these files are given to the model and locked for this task. Paths are inside the role&apos;s folder.
-      </span>
+      <span className="quiet">Tap to choose. Only these files are unlocked for this job.</span>
       {value.length ? (
         <div className="chips">
           {value.map((rel) => (
@@ -67,69 +65,72 @@ export function FilePicker({
           ))}
         </div>
       ) : null}
-      {!listing ? (
-        <button className="ghost" type="button" onClick={() => void open("")}>
-          Pick files
-        </button>
-      ) : (
-        <div className="guide">
-          <p className="guide-path">{listing.path ? `${listing.root}\\${listing.path.replace(/\//g, "\\")}` : listing.root}</p>
-          <div className="guide-actions">
-            {listing.parent !== null ? (
-              <button className="guide-action" type="button" onClick={() => void open(listing.parent ?? "")}>
-                Go up
+      <button className="ghost" type="button" onClick={() => void open(listing?.path || "")}>
+        {listing ? "Refresh list" : "Choose files"}
+      </button>
+      {listing ? (
+        <div className="sheet" role="dialog" aria-label="Choose files">
+          <div className="sheet-panel">
+            <p className="guide-path">
+              {listing.path ? `${listing.root}\\${listing.path.replace(/\//g, "\\")}` : listing.root}
+            </p>
+            <div className="guide-actions">
+              {listing.parent !== null ? (
+                <button className="guide-action" type="button" onClick={() => void open(listing.parent ?? "")}>
+                  Go up
+                </button>
+              ) : null}
+              <button className="guide-action use" type="button" onClick={() => setListing(null)}>
+                Done ({value.length})
               </button>
-            ) : null}
-            <button className="guide-action use" type="button" onClick={() => setListing(null)}>
-              Done
-            </button>
-          </div>
-          <div className="guide-list">
-            {listing.dirs.map((name) => (
-              <button
-                className="guide-folder"
-                key={`d-${name}`}
-                type="button"
-                onClick={() => void open(join(listing.path, name))}
-              >
-                {name}
-              </button>
-            ))}
-            {listing.files.map((name) => {
-              const rel = join(listing.path, name);
-              const picked = value.includes(rel);
-              return (
+            </div>
+            <div className="guide-list">
+              {listing.dirs.map((name) => (
                 <button
-                  className={picked ? "guide-file picked" : "guide-file"}
-                  key={`f-${name}`}
+                  className="guide-folder"
+                  key={`d-${name}`}
                   type="button"
-                  aria-pressed={picked}
-                  onClick={() => toggle(rel)}
+                  onClick={() => void open(join(listing.path, name))}
                 >
                   {name}
                 </button>
-              );
-            })}
-            {listing.dirs.length + listing.files.length === 0 ? <p className="quiet">This folder is empty.</p> : null}
-          </div>
-          <div className="add-row">
-            <input
-              value={newFile}
-              onChange={(event) => setNewFile(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  addNew();
-                }
-              }}
-              placeholder="New file, for example Banner.tsx"
-            />
-            <button className="guide-action" type="button" onClick={addNew}>
-              Add
-            </button>
+              ))}
+              {listing.files.map((name) => {
+                const rel = join(listing.path, name);
+                const picked = value.includes(rel);
+                return (
+                  <button
+                    className={picked ? "guide-file picked" : "guide-file"}
+                    key={`f-${name}`}
+                    type="button"
+                    aria-pressed={picked}
+                    onClick={() => toggle(rel)}
+                  >
+                    {name}
+                  </button>
+                );
+              })}
+              {listing.dirs.length + listing.files.length === 0 ? <p className="quiet">Empty folder.</p> : null}
+            </div>
+            <div className="add-row">
+              <input
+                value={newFile}
+                onChange={(event) => setNewFile(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addNew();
+                  }
+                }}
+                placeholder="New file name"
+              />
+              <button className="guide-action" type="button" onClick={addNew}>
+                Add
+              </button>
+            </div>
           </div>
         </div>
-      )}
+      ) : null}
       {error ? <span className="error">{error}</span> : null}
     </div>
   );

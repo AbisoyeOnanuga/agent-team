@@ -44,6 +44,21 @@ export type PolicyState = {
   modes: Record<string, string>;
 };
 
+export type ScaleProvider = {
+  id: string;
+  label: string;
+  why: string;
+  site: string;
+  cost_index?: number;
+};
+
+export type ScaleBand = {
+  id: string;
+  label: string;
+  slots: number;
+  fit: string;
+};
+
 export type Board = {
   agents: AgentCard[];
   tasks: TaskCard[];
@@ -54,4 +69,16 @@ export type Board = {
   provider: string;
   ollama_model: string;
   ntfy_enabled: boolean;
+  plan?: "free" | "scale";
+  privacy?: "local_first" | "balanced" | "cloud_ok";
+  privacy_hint?: string;
+  scale_cloud?: string;
+  scale_slots?: number;
+  scale_band?: ScaleBand | null;
+  scale_bands?: ScaleBand[];
+  scale_catalog?: ScaleProvider[];
+  cost_hint?: string;
+  cloud_key_set?: boolean;
+  local_ready?: boolean;
+  busy_lanes?: string[];
 };

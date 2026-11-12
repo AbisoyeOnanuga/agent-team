@@ -4,7 +4,7 @@ import { Shell } from "./shell";
 
 export const metadata: Metadata = {
   title: "Agent team",
-  description: "Send work to the three roles and approve the changes that stick.",
+  description: "Send jobs to your coding crew. Approve changes from your phone.",
   manifest: "/manifest.json",
   appleWebApp: { capable: true, title: "Agent team", statusBarStyle: "black" },
 };

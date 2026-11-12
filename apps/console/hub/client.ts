@@ -23,6 +23,26 @@ export function hubBase(): string {
   return "";
 }
 
+/** FastAPI may return detail as a string or a list of validation objects. */
+export function hubDetail(body: unknown, fallback = "Something went wrong."): string {
+  if (!body || typeof body !== "object") return fallback;
+  const detail = (body as { detail?: unknown }).detail;
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object" && "msg" in item) {
+          return String((item as { msg: unknown }).msg);
+        }
+        return "";
+      })
+      .filter(Boolean);
+    return parts.join(" · ") || fallback;
+  }
+  return fallback;
+}
+
 export async function hub(path: string, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers);
   if (init?.body && !headers.has("Content-Type")) {

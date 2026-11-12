@@ -1,17 +1,17 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { hub } from "../hub/client";
-import type { AgentCard, Board } from "../hub/types";
+import { hub, hubDetail } from "../hub/client";
+import type { AgentCard, Board, TaskCard } from "../hub/types";
 import { FilePicker } from "./file-picker";
 
 type PixelKind = "idle" | "work" | "hold" | "dry";
 
 const PIXEL_LABEL: Record<PixelKind, string> = {
-  idle: "Idle",
-  work: "Editing",
-  hold: "Waiting",
-  dry: "Dry-run",
+  idle: "Ready",
+  work: "Working",
+  hold: "Needs you",
+  dry: "Practice",
 };
 
 function agentState(agent: AgentCard, board: Board | null): PixelKind {
@@ -26,13 +26,87 @@ function agentState(agent: AgentCard, board: Board | null): PixelKind {
 function PixelState({ state }: { state: PixelKind }) {
   return (
     <div className="pixel-wrap">
-      <div className="pixel" data-state={state} aria-hidden="true">
+      <div className={`pixel state-pulse`} data-state={state} aria-hidden="true">
         {Array.from({ length: 25 }, (_, index) => (
           <i key={index} />
         ))}
       </div>
       <span className="pixel-label">{PIXEL_LABEL[state]}</span>
     </div>
+  );
+}
+
+function laneBlurb(board: Board | null): string {
+  if (!board) return "";
+  const plan = board.plan || "free";
+  const busy = board.busy_lanes?.length ?? 0;
+  const slots = board.scale_slots ?? 2;
+  if (plan === "scale") {
+    const band = board.scale_band?.label || "Scale";
+    const local = board.local_ready ? "local on" : "local off";
+    return `${band} · ${busy} of ${slots} jobs running · ${board.scale_cloud || "cloud"} · ${local}`;
+  }
+  const first = board.provider === "ollama" ? `local ${board.ollama_model}` : "Gemini";
+  return `Free · up to 2 jobs · starts with ${first}`;
+}
+
+function LaneBoard({
+  board,
+  busy,
+  slots,
+}: {
+  board: Board | null;
+  busy: string[];
+  slots: number;
+}) {
+  const plan = board?.plan || "free";
+  const show = Math.min(Math.max(slots, 2), 24);
+  const fill = busy.length;
+  const pct = Math.round((fill / show) * 100);
+  return (
+    <section className="lane-board" aria-label="Job capacity">
+      <div className="lane-top">
+        <span className="eyebrow">{plan === "scale" ? board?.scale_band?.label || "Scale" : "Free"}</span>
+        <span className="lane-count">
+          <strong>{fill}</strong>/{show}
+        </span>
+      </div>
+      <div className="lane-meter" aria-hidden="true">
+        <i style={{ width: `${pct}%` }} />
+      </div>
+      <div
+        className="lane-grid"
+        style={{ "--lane-cols": show <= 6 ? show : show <= 12 ? 6 : 8 } as React.CSSProperties}
+      >
+        {Array.from({ length: show }, (_, index) => {
+          const live = index < fill;
+          const local = live && String(busy[index] || "").startsWith("ollama");
+          return (
+            <span
+              key={index}
+              className={live ? (local ? "lane-cell local" : "lane-cell live") : "lane-cell"}
+              title={live ? busy[index] || "busy" : "open"}
+            />
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function JobChip({ task, agents }: { task: TaskCard; agents: AgentCard[] }) {
+  const name = agents.find((agent) => agent.agent_id === task.assigned_agent)?.name || "Team";
+  const tone = task.status === "IN_PROGRESS" ? "run" : task.status === "REVIEW" ? "hold" : "wait";
+  return (
+    <article className={`job-chip ${tone}`}>
+      <span className="job-dot" aria-hidden="true" />
+      <div>
+        <strong>{task.title}</strong>
+        <div className="quiet">
+          {name} · {task.status === "IN_PROGRESS" ? "working" : task.status === "REVIEW" ? "needs you" : "queued"}
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -52,8 +126,7 @@ export default function BoardPage() {
   async function load() {
     const response = await hub("/api/board");
     if (!response.ok) return;
-    const next = (await response.json()) as Board;
-    setBoard(next);
+    setBoard((await response.json()) as Board);
   }
 
   useEffect(() => {
@@ -66,13 +139,13 @@ export default function BoardPage() {
     event.preventDefault();
     setError("");
     if (!files.length || (second && !files2.length)) {
-      setError("Pick at least one file for each task.");
+      setError("Choose at least one file for each job.");
       return;
     }
     const jobs = [{ title, prompt, agent_id: agentId, files }];
     if (second) {
       if (agent2 === agentId) {
-        setError("Pick two different roles. A role works one folder at a time.");
+        setError("Pick two different teammates.");
         return;
       }
       jobs.push({ title: title2, prompt: prompt2, agent_id: agent2, files: files2 });
@@ -84,7 +157,7 @@ export default function BoardPage() {
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        setError(body.detail || "The task was not queued.");
+        setError(hubDetail(body, "Could not send that job."));
         return;
       }
     }
@@ -99,44 +172,57 @@ export default function BoardPage() {
   }
 
   const holds = board?.pending_approvals.length ?? 0;
+  const slots = board?.scale_slots ?? 2;
+  const busyLanes = board?.busy_lanes ?? [];
+  const openTasks = (board?.tasks ?? []).filter((task) =>
+    ["TODO", "IN_PROGRESS", "REVIEW"].includes(task.status),
+  );
 
   return (
     <main className="stack">
       <header className="mast">
         <div>
-          <p className="eyebrow">Agent team</p>
-          <h1>Team</h1>
-          <p className="quiet">The three roles, and the tasks you send them.</p>
+          <p className="eyebrow">Your coding crew</p>
+          <h1>Home</h1>
+          <p className="quiet">Send a job. Watch them work. Step in when they ask.</p>
         </div>
-        <span className={holds ? "pill hold" : "pill"}>{holds} hold</span>
+        <span className={holds ? "pill hold pulse-pill" : "pill"}>{holds} waiting</span>
       </header>
-      {board?.provider ? (
-        <p className="quiet">
-          First model: {board.provider === "ollama" ? `local ${board.ollama_model}` : "Gemini"}. A second role uses the other model. Switch the first in Access.
-        </p>
-      ) : null}
+      <LaneBoard board={board} busy={busyLanes} slots={slots} />
+      <p className="quiet lane-line">{laneBlurb(board)}</p>
+      {board?.cost_hint ? <p className="quiet cost-hint">{board.cost_hint}</p> : null}
       {board?.model_offline ? (
-        <p className="banner">Model offline. Cursor&apos;s Grok login does not drive this swarm. Add an xAI API key or Ollama, or keep the dry-run.</p>
+        <p className="banner">No model is ready. In Setup, add a Gemini key or start local Ollama. You can still queue practice jobs.</p>
       ) : null}
-      <section className="stack" aria-label="Agents">
+      <section className="agent-rail" aria-label="Teammates">
         {(board?.agents ?? []).map((agent) => {
           const state = agentState(agent, board);
           return (
-            <article className="card agent" key={agent.agent_id}>
+            <article className={`card agent agent-${state}`} key={agent.agent_id}>
               <div>
                 <strong>{agent.name}</strong>
                 <div className="meta">{agent.role}</div>
-                <div className="quiet">{agent.repo_path || "No project folder yet"}</div>
+                <div className="quiet path-trim">{agent.repo_path || "Set a folder in Setup"}</div>
               </div>
               <PixelState state={state} />
             </article>
           );
         })}
       </section>
+      {openTasks.length ? (
+        <section className="job-rail" aria-label="Open jobs">
+          <p className="eyebrow">Open jobs</p>
+          <div className="job-scroll">
+            {openTasks.map((task) => (
+              <JobChip key={task.id} task={task} agents={board?.agents ?? []} />
+            ))}
+          </div>
+        </section>
+      ) : null}
       <form className="card stack" onSubmit={assign}>
-        <h2>Send a task</h2>
+        <h2>New job</h2>
         <label className="field">
-          Title
+          Short title
           <input value={title} onChange={(event) => setTitle(event.target.value)} required />
         </label>
         <label className="field">
@@ -144,7 +230,7 @@ export default function BoardPage() {
           <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} required />
         </label>
         <label className="field">
-          Agent
+          Teammate
           <select
             value={agentId}
             onChange={(event) => {
@@ -167,7 +253,7 @@ export default function BoardPage() {
         </label>
         <FilePicker key={agentId} agentId={agentId} value={files} onChange={setFiles} />
         <button className="ghost" type="button" onClick={() => setSecond((open) => !open)}>
-          {second ? "One role only" : "Add a second role"}
+          {second ? "One job only" : "Add a second job"}
         </button>
         {second ? (
           <>
@@ -176,11 +262,11 @@ export default function BoardPage() {
               <input value={title2} onChange={(event) => setTitle2(event.target.value)} required />
             </label>
             <label className="field">
-              What the second role should change
+              What the second teammate should change
               <textarea value={prompt2} onChange={(event) => setPrompt2(event.target.value)} required />
             </label>
             <label className="field">
-              Second agent
+              Second teammate
               <select
                 value={agent2}
                 onChange={(event) => {
@@ -201,7 +287,7 @@ export default function BoardPage() {
           </>
         ) : null}
         {error ? <p className="error">{error}</p> : null}
-        <button className="wide" type="submit">{second ? "Queue both" : "Queue it"}</button>
+        <button className="wide" type="submit">{second ? "Send both" : "Send job"}</button>
       </form>
     </main>
   );
